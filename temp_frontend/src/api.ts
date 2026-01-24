@@ -72,13 +72,36 @@ export interface ActionResponse {
 	interview_questions: string[];
 }
 
+// Session Management
+const SESSION_KEY = 'jobos_session_id';
+
+function getSessionId(): string {
+	let sid = localStorage.getItem(SESSION_KEY);
+	if (!sid) {
+		// Simple UUID v4 generator
+		sid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+			const r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+			return v.toString(16);
+		});
+		localStorage.setItem(SESSION_KEY, sid);
+	}
+	return sid;
+}
+
+function getHeaders(contentType = 'application/json'): HeadersInit {
+	return {
+		'Content-Type': contentType,
+		'X-Session-ID': getSessionId()
+	};
+}
+
 // API Functions
 export const api = {
 	// Multi-turn chat for requirement clarification
 	async chat(message: string, history: ChatMessage[] = []): Promise<ChatResponse> {
 		const res = await fetch(`${API_BASE}/chat`, {
 			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
+			headers: getHeaders(),
 			body: JSON.stringify({ message, history })
 		});
 		if (!res.ok) throw new Error(`Chat failed: ${res.status}`);
@@ -87,14 +110,17 @@ export const api = {
 
 	// Reset chat history
 	async resetChat(): Promise<void> {
-		await fetch(`${API_BASE}/reset_chat`, { method: 'POST' });
+		await fetch(`${API_BASE}/reset_chat`, {
+			method: 'POST',
+			headers: getHeaders()
+		});
 	},
 
 	// Generate JD from collected info
 	async generateJd(answers: ClarificationAnswer[], rawReq: string): Promise<JobDefinition> {
 		const res = await fetch(`${API_BASE}/generate_jd`, {
 			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
+			headers: getHeaders(),
 			body: JSON.stringify({ answers, raw_req: rawReq })
 		});
 		if (!res.ok) throw new Error(`Generate JD failed: ${res.status}`);
@@ -106,8 +132,12 @@ export const api = {
 		const formData = new FormData();
 		formData.append('file', file);
 
+		// Content-Type is auto-set by fetch for FormData, so we only need X-Session-ID
+		const headers: any = { 'X-Session-ID': getSessionId() };
+
 		const res = await fetch(`${API_BASE}/upload_resumes`, {
 			method: 'POST',
+			headers: headers,
 			body: formData
 		});
 		if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
@@ -124,8 +154,11 @@ export const api = {
 			const formData = new FormData();
 			formData.append('file', file);
 
+			const headers: any = { 'X-Session-ID': getSessionId() };
+
 			const res = await fetch(`${API_BASE}/upload_resumes`, {
 				method: 'POST',
+				headers: headers,
 				body: formData
 			});
 			if (res.ok) {
@@ -139,14 +172,19 @@ export const api = {
 
 	// Generate fake resumes for testing
 	async generateFakeResumes(): Promise<Resume[]> {
-		const res = await fetch(`${API_BASE}/generate_fake_resumes`);
+		const res = await fetch(`${API_BASE}/generate_fake_resumes`, {
+			headers: getHeaders()
+		});
 		if (!res.ok) throw new Error(`Generate fake resumes failed: ${res.status}`);
 		return res.json();
 	},
 
 	// Analyze and rank resumes
 	async analyzeResumes(): Promise<CandidateRank[]> {
-		const res = await fetch(`${API_BASE}/analyze_resumes`, { method: 'POST' });
+		const res = await fetch(`${API_BASE}/analyze_resumes`, {
+			method: 'POST',
+			headers: getHeaders()
+		});
 		if (!res.ok) throw new Error(`Analyze failed: ${res.status}`);
 		return res.json();
 	},
@@ -155,7 +193,7 @@ export const api = {
 	async generateAction(candidateName: string, actionType: 'offer' | 'reject' | 'interview', jobTitle: string): Promise<ActionResponse> {
 		const res = await fetch(`${API_BASE}/generate_action`, {
 			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
+			headers: getHeaders(),
 			body: JSON.stringify({
 				candidate_name: candidateName,
 				action_type: actionType,

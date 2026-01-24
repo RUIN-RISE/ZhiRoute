@@ -36,43 +36,65 @@ if os.path.exists(FRONTEND_DIST):
 async def health_check():
     return {"status": "ok", "service": "JobOS-Backend"}
 
-# State (In-memory for MVP)
-CURRENT_JD = None
-GENERATED_RESUMES = []
-CHAT_HISTORY = []  # Store chat history for clarification
-COLLECTED_INFO = {}  # Store collected requirement info
+from fastapi import Header, Depends
+
+# State (Session-based)
+class UserState:
+    def __init__(self):
+        self.current_jd = None
+        self.resumes = []
+        self.chat_history = []
+        self.collected_info = {}
+
+# In-memory session store: session_id -> UserState
+SESSIONS: Dict[str, UserState] = {}
+
+async def get_current_user(x_session_id: str = Header(None)) -> UserState:
+    if not x_session_id:
+        # Fallback for dev/testing without header, or generate one
+        # Ideally, frontend MUST send it.
+        x_session_id = "default_dev_session"
+    
+    if x_session_id not in SESSIONS:
+        SESSIONS[x_session_id] = UserState()
+    
+    return SESSIONS[x_session_id]
+
+# Clean up globals
+# CURRENT_JD = None
+# GENERATED_RESUMES = []
+# CHAT_HISTORY = []
+# COLLECTED_INFO = {}
 
 async def read_root():
     return FileResponse('templates/index.html')
 
 @app.post("/api/chat", response_model=ChatResponse)
-async def chat_clarify_endpoint(req: ChatRequest):
+async def chat_clarify_endpoint(req: ChatRequest, user: UserState = Depends(get_current_user)):
     """Multi-turn dialogue endpoint for requirement clarification"""
-    global CHAT_HISTORY, COLLECTED_INFO
     
     # Use provided history or stored history
-    history = [{"role": m.role, "content": m.content} for m in req.history] if req.history else CHAT_HISTORY
+    history = [{"role": m.role, "content": m.content} for m in req.history] if req.history else user.chat_history
     
     # Call LLM
     response = llm.chat_clarify(history, req.message)
     
     # Store updated history
     if req.message:
-        CHAT_HISTORY.append({"role": "user", "content": req.message})
-    CHAT_HISTORY.append({"role": "assistant", "content": response.reply})
+        user.chat_history.append({"role": "user", "content": req.message})
+    user.chat_history.append({"role": "assistant", "content": response.reply})
     
     # Store collected info
     if response.collected_info:
-        COLLECTED_INFO.update(response.collected_info)
+        user.collected_info.update(response.collected_info)
     
     return response
 
 @app.post("/api/reset_chat")
-async def reset_chat():
+async def reset_chat(user: UserState = Depends(get_current_user)):
     """Reset chat history for a new conversation"""
-    global CHAT_HISTORY, COLLECTED_INFO
-    CHAT_HISTORY = []
-    COLLECTED_INFO = {}
+    user.chat_history = []
+    user.collected_info = {}
     return {"status": "ok"}
 
 @app.post("/api/clarify", response_model=ClarificationResponse)
@@ -84,17 +106,15 @@ class GenerateJdRequest(BaseModel):
     raw_req: str
 
 @app.post("/api/generate_jd", response_model=JobDefinition)
-async def generate_jd_endpoint(req: GenerateJdRequest):
-    global CURRENT_JD
+async def generate_jd_endpoint(req: GenerateJdRequest, user: UserState = Depends(get_current_user)):
     # Convert list to dict for LLM
     answers_dict = {a.question_id: a.answer for a in req.answers}
     jd = llm.generate_jd(answers_dict, req.raw_req)
-    CURRENT_JD = jd
+    user.current_jd = jd
     return jd
 
 @app.post("/api/upload_resumes", response_model=List[Resume])
-async def upload_resumes(file: UploadFile = File(...)):
-    global GENERATED_RESUMES
+async def upload_resumes(file: UploadFile = File(...), user: UserState = Depends(get_current_user)):
     import zipfile
     import io
     
@@ -200,31 +220,32 @@ async def upload_resumes(file: UploadFile = File(...)):
             years_experience=3
         ))
     
-    GENERATED_RESUMES = resumes
-    return resumes
+    # Append to user session instead of overwriting!
+    user.resumes.extend(resumes)
+    
+    # Return ALL resumes for this user so frontend count is accurate
+    return user.resumes
 
 @app.get("/api/generate_fake_resumes", response_model=List[Resume])
-async def get_fake_resumes():
-    global GENERATED_RESUMES
+async def get_fake_resumes(user: UserState = Depends(get_current_user)):
     role_hint = "python"
-    if CURRENT_JD:
-        role_hint = CURRENT_JD.title
+    if user.current_jd:
+        role_hint = user.current_jd.title
     
     resumes = fake_data.generate_fake_resumes(count=5, role_hint=role_hint)
-    GENERATED_RESUMES = resumes
-    return resumes
+    user.resumes.extend(resumes)
+    return user.resumes
 
 @app.post("/api/analyze_resumes", response_model=List[CandidateRank])
-async def analyze_resumes():
-    global CURRENT_JD, GENERATED_RESUMES
-    if not CURRENT_JD:
+async def analyze_resumes(user: UserState = Depends(get_current_user)):
+    if not user.current_jd:
         raise HTTPException(status_code=400, detail="No JD generated yet")
-    if not GENERATED_RESUMES:
+    if not user.resumes:
         raise HTTPException(status_code=400, detail="No resumes loaded")
     
     # Convert Pydantic models to dicts for the service
-    resume_dicts = [r.dict() for r in GENERATED_RESUMES]
-    ranks = llm.rank_candidates(CURRENT_JD, resume_dicts)
+    resume_dicts = [r.dict() for r in user.resumes]
+    ranks = llm.rank_candidates(user.current_jd, resume_dicts)
     print(f"DEBUG API: Returning {len(ranks)} candidates to frontend")
     return ranks
 
