@@ -44,15 +44,22 @@
             <!-- Step 1.5: Clarification Chat -->
             <section id="step-clarify" class="step-section hidden">
                 <div class="section-header">
-                    <h2>需求澄清</h2>
-                    <p>请回答以下问题，帮助我更精准地理解岗位。</p>
+                    <h2>💬 需求澄清对话</h2>
+                    <p>与 AI 对话，明确您的招聘需求。</p>
                 </div>
-                <div id="clarification-container" class="chat-container">
-                    <!-- Dynamic Questions -->
+                <div id="chat-container" class="chat-box">
+                    <!-- Chat messages will be added here -->
+                </div>
+                <div id="quick-replies" class="quick-reply-container">
+                    <!-- Quick reply buttons will be added here -->
+                </div>
+                <div class="chat-input-row">
+                    <input type="text" id="chat-input" placeholder="输入消息..." />
+                    <button id="btn-send-chat" class="btn-primary">发送</button>
                 </div>
                 <div class="action-row mt-20">
-                    <button id="btn-generate-jd" class="btn-primary">生成 JD</button>
-                    <button id="btn-retry-clarify" class="btn-secondary" style="margin-left: 10px;">↺ 重生成问题</button>
+                    <button id="btn-generate-jd" class="btn-primary hidden">✅ 确认需求并生成 JD</button>
+                    <button id="btn-restart-chat" class="btn-secondary" style="margin-left: 10px;">🔄 重新开始</button>
                 </div>
                 <div id="loading-jd" class="loading hidden">正在撰写 JD...</div>
             </section>

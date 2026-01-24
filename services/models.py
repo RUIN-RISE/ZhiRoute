@@ -65,3 +65,19 @@ class ActionRequest(BaseModel):
 class ActionResponse(BaseModel):
     content: str
     interview_questions: List[str] = []  # For interview type
+
+# Multi-turn chat models
+class ChatMessage(BaseModel):
+    role: str  # 'user' or 'assistant'
+    content: str
+
+class ChatRequest(BaseModel):
+    message: str
+    history: List[ChatMessage] = []
+
+class ChatResponse(BaseModel):
+    reply: str
+    is_complete: bool = False  # True when all info is collected
+    collected_info: Dict = {}  # Collected requirement info
+    quick_replies: List[str] = []  # Optional quick reply buttons
+

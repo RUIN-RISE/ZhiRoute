@@ -3,7 +3,7 @@ import os
 import re
 from typing import List, Dict
 import json
-from .models import ClarificationQuestion, ClarificationResponse, JobDefinition, CandidateRank, Evidence, ActionResponse
+from .models import ClarificationQuestion, ClarificationResponse, JobDefinition, CandidateRank, Evidence, ActionResponse, ChatMessage, ChatResponse
 
 # Multi-model configuration with automatic fallback
 API_KEY = os.environ.get("MS_API_KEY", "ms-45e447b6-6011-42e3-bc04-6de20f7fd4f1")
@@ -11,9 +11,9 @@ BASE_URL = "https://api-inference.modelscope.cn/v1"
 
 # Available models in order of preference (GLM first)
 MODEL_CONFIGS = [
-    {"id": "ZhipuAI/GLM-4-Flash-250414", "name": "GLM-4-Flash"},
-    {"id": "deepseek-ai/DeepSeek-V3-0324", "name": "DeepSeek-V3"},
-    {"id": "Qwen/Qwen3-235B-A22B-Instruct", "name": "Qwen3"},
+    {"id": "ZhipuAI/GLM-4.7", "name": "GLM-4.7"},
+    {"id": "deepseek-ai/DeepSeek-V3.2", "name": "DeepSeek-V3.2"},
+    {"id": "Qwen/Qwen3-235B-A22B-Instruct-2507", "name": "Qwen3"},
 ]
 
 # Track current model index (starts with first = MiniMax)
@@ -150,6 +150,85 @@ Soft_Skills: [软技能1, 软技能2, ...]
         structured.extend(raw_texts[len(structured):])
     
     return structured[:len(raw_texts)]
+
+
+# Chat conversation system prompt
+CHAT_SYSTEM_PROMPT = """你是一个专业的招聘需求澄清助手。你的任务是通过多轮对话帮助用户明确招聘需求。
+
+【对话流程】按顺序询问以下内容：
+1. 职位名称：想招聘什么职位？
+2. 核心技能(Must-have)：必须掌握的技术/技能是什么？
+3. 工作经验：需要多少年相关工作经验？
+4. 学历要求：最低学历要求是什么？（本科/硕士/不限等）
+5. 薪资范围：预计薪资范围是多少？（如15-25k）
+6. 软技能：看重哪些软技能？（如沟通、团队协作）
+7. 加分项：有什么加分项？（如证书、开源项目经验）
+
+每次只问一个问题，等用户回答后再问下一个。
+收集完所有信息后，总结并确认。
+
+【输出格式】严格JSON:
+{
+  "reply": "你的回复内容",
+  "is_complete": false,
+  "collected_info": {
+    "role": "职位名称",
+    "core_skills": ["技能1", "技能2"],
+    "exp_years": "3-5年",
+    "education": "本科",
+    "salary": "15-25k",
+    "soft_skills": ["沟通能力"],
+    "bonus": ["相关证书"]
+  },
+  "quick_replies": ["选项1", "选项2", "选项3"]
+}
+
+【规则】
+- is_complete=true 表示所有7项信息已收集完毕
+- quick_replies 提供快捷回复选项（可选，最多5个）
+- collected_info 只填写已确认的信息
+- 回复要简洁友好，像真人对话
+- 如果用户说"不限"或"都可以"，也要记录下来
+- 【重要】reply 必须是纯文本，不要使用 **粗体**、# 标题等 Markdown 格式
+"""
+
+
+def chat_clarify(history: List[Dict], user_message: str) -> ChatResponse:
+    """Multi-turn dialogue for requirement clarification"""
+    
+    # Build conversation messages
+    messages = [{"role": "system", "content": CHAT_SYSTEM_PROMPT}]
+    
+    # Add conversation history
+    for msg in history:
+        messages.append({"role": msg.get("role", "user"), "content": msg.get("content", "")})
+    
+    # Add current user message
+    if user_message:
+        messages.append({"role": "user", "content": user_message})
+    else:
+        # Start conversation
+        messages.append({"role": "user", "content": "开始"})
+    
+    result = _call_llm(messages, timeout=15.0)
+    
+    # Parse JSON response
+    try:
+        # Extract JSON from response
+        json_match = re.search(r'\{[\s\S]*\}', result)
+        if json_match:
+            data = json.loads(json_match.group())
+        else:
+            data = {"reply": result, "is_complete": False}
+    except json.JSONDecodeError:
+        data = {"reply": result, "is_complete": False}
+    
+    return ChatResponse(
+        reply=data.get("reply", "抱歉，我没有理解您的意思，能再说一遍吗？"),
+        is_complete=data.get("is_complete", False),
+        collected_info=data.get("collected_info", {}),
+        quick_replies=data.get("quick_replies", [])
+    )
 
 
 def clarify_requirements(raw_req: str) -> ClarificationResponse:

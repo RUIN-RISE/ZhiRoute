@@ -7,7 +7,7 @@ from typing import List, Dict
 import uvicorn
 import os
 
-from services.models import JobRequest, ClarificationResponse, ClarificationAnswer, JobDefinition, Resume, CandidateRank, ActionRequest, ActionResponse
+from services.models import JobRequest, ClarificationResponse, ClarificationAnswer, JobDefinition, Resume, CandidateRank, ActionRequest, ActionResponse, ChatRequest, ChatResponse
 from services import llm
 from services import fake_data
 
@@ -28,10 +28,42 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 # State (In-memory for MVP)
 CURRENT_JD = None
 GENERATED_RESUMES = []
+CHAT_HISTORY = []  # Store chat history for clarification
+COLLECTED_INFO = {}  # Store collected requirement info
 
 @app.get("/")
 async def read_root():
     return FileResponse('templates/index.html')
+
+@app.post("/api/chat", response_model=ChatResponse)
+async def chat_clarify_endpoint(req: ChatRequest):
+    """Multi-turn dialogue endpoint for requirement clarification"""
+    global CHAT_HISTORY, COLLECTED_INFO
+    
+    # Use provided history or stored history
+    history = [{"role": m.role, "content": m.content} for m in req.history] if req.history else CHAT_HISTORY
+    
+    # Call LLM
+    response = llm.chat_clarify(history, req.message)
+    
+    # Store updated history
+    if req.message:
+        CHAT_HISTORY.append({"role": "user", "content": req.message})
+    CHAT_HISTORY.append({"role": "assistant", "content": response.reply})
+    
+    # Store collected info
+    if response.collected_info:
+        COLLECTED_INFO.update(response.collected_info)
+    
+    return response
+
+@app.post("/api/reset_chat")
+async def reset_chat():
+    """Reset chat history for a new conversation"""
+    global CHAT_HISTORY, COLLECTED_INFO
+    CHAT_HISTORY = []
+    COLLECTED_INFO = {}
+    return {"status": "ok"}
 
 @app.post("/api/clarify", response_model=ClarificationResponse)
 async def clarify_req(req: JobRequest):

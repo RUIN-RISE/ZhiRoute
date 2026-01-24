@@ -5,7 +5,10 @@ const state = {
 	questions: [],
 	answers: {},
 	jd: null,
-	resumes: []
+	resumes: [],
+	chatHistory: [],
+	collectedInfo: {},
+	isComplete: false
 };
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -17,19 +20,22 @@ document.addEventListener('DOMContentLoaded', () => {
 	const btnAnalyze = document.getElementById('btn-analyze');
 
 	// Event Listeners
-	// Event Listeners
-	btnStartClarify.addEventListener('click', handleClarify);
+	btnStartClarify.addEventListener('click', startChat);
 
-	// Clarify Buttons
-	btnGenerateJd.addEventListener('click', handleGenerateJd);
-	document.getElementById('btn-retry-clarify')?.addEventListener('click', handleClarify);
+	// Chat controls
+	document.getElementById('btn-send-chat')?.addEventListener('click', sendChatMessage);
+	document.getElementById('chat-input')?.addEventListener('keypress', (e) => {
+		if (e.key === 'Enter') sendChatMessage();
+	});
+	document.getElementById('btn-restart-chat')?.addEventListener('click', restartChat);
 
 	// JD Buttons
+	btnGenerateJd.addEventListener('click', handleGenerateJdFromChat);
 	btnConfirmJd.addEventListener('click', () => {
-		saveJdEdits(); // Save user edits
+		saveJdEdits();
 		switchStep(3);
 	});
-	document.getElementById('btn-retry-jd')?.addEventListener('click', handleGenerateJd);
+	document.getElementById('btn-retry-jd')?.addEventListener('click', handleGenerateJdFromChat);
 
 	const fileInput = document.getElementById('file-upload-input');
 	if (fileInput) {
@@ -86,10 +92,11 @@ function switchStep(step) {
 	state.currentStep = step;
 }
 
-// Step 1 -> 1.5
-async function handleClarify() {
+// ========== CHAT FUNCTIONS FOR MULTI-TURN DIALOGUE ==========
+
+// Start chat conversation
+async function startChat() {
 	const rawReq = document.getElementById('initial-req').value;
-	if (!rawReq) return alert('请先输入简要需求');
 
 	const loader = document.getElementById('loading-clarify');
 	const btn = document.getElementById('btn-start-clarify');
@@ -97,15 +104,50 @@ async function handleClarify() {
 	loader.classList.remove('hidden');
 	btn.disabled = true;
 
+	// Reset chat state
+	state.chatHistory = [];
+	state.collectedInfo = {};
+	state.isComplete = false;
+
+	// Reset backend chat
+	await fetch('/api/reset_chat', { method: 'POST' });
+
+	// Clear chat container
+	document.getElementById('chat-container').innerHTML = '';
+	document.getElementById('quick-replies').innerHTML = '';
+	document.getElementById('btn-generate-jd').classList.add('hidden');
+
 	try {
-		const res = await fetch('/api/clarify', {
+		// Send initial message (or empty to start)
+		const res = await fetch('/api/chat', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ raw_requirement: rawReq })
+			body: JSON.stringify({ message: rawReq || '', history: [] })
 		});
 		const data = await res.json();
 
-		renderQuestions(data.questions);
+		// Add user message if any
+		if (rawReq) {
+			state.chatHistory.push({ role: 'user', content: rawReq });
+			renderChatMessage('user', rawReq);
+		}
+
+		// Add AI response
+		state.chatHistory.push({ role: 'assistant', content: data.reply });
+		renderChatMessage('ai', data.reply);
+		renderQuickReplies(data.quick_replies || []);
+
+		// Update collected info
+		if (data.collected_info) {
+			state.collectedInfo = { ...state.collectedInfo, ...data.collected_info };
+		}
+
+		// Check if complete
+		if (data.is_complete) {
+			state.isComplete = true;
+			document.getElementById('btn-generate-jd').classList.remove('hidden');
+		}
+
 		switchStep(1.5);
 	} catch (e) {
 		alert('请求失败，请检查后端');
@@ -114,6 +156,159 @@ async function handleClarify() {
 		loader.classList.add('hidden');
 		btn.disabled = false;
 	}
+}
+
+// Send chat message
+async function sendChatMessage() {
+	const input = document.getElementById('chat-input');
+	const message = input.value.trim();
+	if (!message) return;
+
+	input.value = '';
+	input.disabled = true;
+	document.getElementById('btn-send-chat').disabled = true;
+
+	// Show user message
+	state.chatHistory.push({ role: 'user', content: message });
+	renderChatMessage('user', message);
+
+	// Clear quick replies
+	document.getElementById('quick-replies').innerHTML = '';
+
+	try {
+		const res = await fetch('/api/chat', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ message, history: [] })
+		});
+		const data = await res.json();
+
+		// Add AI response
+		state.chatHistory.push({ role: 'assistant', content: data.reply });
+		renderChatMessage('ai', data.reply);
+		renderQuickReplies(data.quick_replies || []);
+
+		// Update collected info
+		if (data.collected_info) {
+			state.collectedInfo = { ...state.collectedInfo, ...data.collected_info };
+		}
+
+		// Check if complete
+		if (data.is_complete) {
+			state.isComplete = true;
+			document.getElementById('btn-generate-jd').classList.remove('hidden');
+		}
+	} catch (e) {
+		renderChatMessage('ai', '抱歉，发生了错误，请重试。');
+		console.error(e);
+	} finally {
+		input.disabled = false;
+		document.getElementById('btn-send-chat').disabled = false;
+		input.focus();
+	}
+}
+
+// Restart chat
+async function restartChat() {
+	if (!confirm('确定要重新开始对话吗？')) return;
+
+	state.chatHistory = [];
+	state.collectedInfo = {};
+	state.isComplete = false;
+
+	await fetch('/api/reset_chat', { method: 'POST' });
+
+	document.getElementById('chat-container').innerHTML = '';
+	document.getElementById('quick-replies').innerHTML = '';
+	document.getElementById('btn-generate-jd').classList.add('hidden');
+
+	// Start new chat with welcome message
+	try {
+		const res = await fetch('/api/chat', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ message: '', history: [] })
+		});
+		const data = await res.json();
+
+		state.chatHistory.push({ role: 'assistant', content: data.reply });
+		renderChatMessage('ai', data.reply);
+		renderQuickReplies(data.quick_replies || []);
+	} catch (e) {
+		console.error(e);
+	}
+}
+
+// Render a single chat message
+function renderChatMessage(role, content) {
+	const container = document.getElementById('chat-container');
+	const msgDiv = document.createElement('div');
+	msgDiv.className = `chat-message ${role}`;
+	msgDiv.textContent = content;
+	container.appendChild(msgDiv);
+	container.scrollTop = container.scrollHeight;
+}
+
+// Render quick reply buttons
+function renderQuickReplies(replies) {
+	const container = document.getElementById('quick-replies');
+	container.innerHTML = '';
+
+	replies.forEach(reply => {
+		const btn = document.createElement('button');
+		btn.className = 'quick-reply-btn';
+		btn.textContent = reply;
+		btn.onclick = () => {
+			document.getElementById('chat-input').value = reply;
+			sendChatMessage();
+		};
+		container.appendChild(btn);
+	});
+}
+
+// Generate JD from collected chat info
+async function handleGenerateJdFromChat() {
+	const loader = document.getElementById('loading-jd');
+	loader.classList.remove('hidden');
+
+	// Convert collected info to answers format
+	const answers = [];
+	const info = state.collectedInfo;
+
+	if (info.role) answers.push({ question_id: 'role', answer: info.role });
+	if (info.core_skills) answers.push({ question_id: 'skills', answer: info.core_skills.join(', ') });
+	if (info.exp_years) answers.push({ question_id: 'exp', answer: info.exp_years });
+	if (info.soft_skills) answers.push({ question_id: 'soft', answer: info.soft_skills.join(', ') });
+	if (info.bonus) answers.push({ question_id: 'bonus', answer: info.bonus.join(', ') });
+
+	// Build raw requirement from chat
+	const rawReq = state.chatHistory
+		.filter(m => m.role === 'user')
+		.map(m => m.content)
+		.join('; ');
+
+	try {
+		const res = await fetch('/api/generate_jd', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ answers, raw_req: rawReq || '招聘职位' })
+		});
+		const jd = await res.json();
+
+		state.jd = jd;
+		renderJd(jd);
+		switchStep(2);
+	} catch (e) {
+		alert('生成 JD 失败');
+		console.error(e);
+	} finally {
+		loader.classList.add('hidden');
+	}
+}
+
+// Legacy handleClarify for backward compatibility
+async function handleClarify() {
+	startChat();
 }
 
 function renderQuestions(questions) {
