@@ -245,12 +245,16 @@ function JdReviewPanel({ jd, onConfirm }: { jd: StructuredJD, onConfirm: (jd: St
             <input className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-indigo-500/50 outline-none transition-colors" value={editedJd.stack.join(', ')} onChange={e => handleChange('stack', e.target.value.split(/[,，]/).map(s => s.trim()).filter(Boolean))} />
           </div>
           <div className="col-span-2 space-y-2">
-            <Label icon={<Target className="w-4 h-4" />} text="加分项/公司亮点 (逗号分隔)" />
+            <Label icon={<Target className="w-4 h-4" />} text="加分项 (逗号分隔)" />
             <input className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-indigo-500/50 outline-none transition-colors" value={editedJd.plus_points.join(', ')} onChange={e => handleChange('plus_points', e.target.value.split(/[,，]/).map(s => s.trim()).filter(Boolean))} />
           </div>
           <div className="space-y-2">
             <Label icon={<ShieldCheck className="w-4 h-4" />} text="学历要求" />
             <input className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-indigo-500/50 outline-none transition-colors" value={editedJd.education} onChange={e => handleChange('education', e.target.value)} />
+          </div>
+          <div className="space-y-2">
+            <Label icon={<Activity className="w-4 h-4" />} text="薪资待遇" />
+            <input className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-indigo-500/50 outline-none transition-colors" value={editedJd.remarks} onChange={e => handleChange('remarks', e.target.value)} />
           </div>
           <div className="space-y-2">
             <Label icon={<Vote className="w-4 h-4" />} text="软技能" />
@@ -386,7 +390,9 @@ function SpecConfigurator({ initialUserInput, onComplete }: { initialUserInput: 
       culture_fit: info.soft_skills || info.culture_fit || prev.culture_fit,
       education: info.education || prev.education,
       // Map 'bonus' or 'plus_points' from backend to frontend 'plus_points'
-      plus_points: info.bonus || info.plus_points || prev.plus_points
+      plus_points: info.bonus || info.plus_points || prev.plus_points,
+      // Map 'salary' from backend to frontend 'remarks'
+      remarks: info.salary || prev.remarks
     }));
   };
 
@@ -523,6 +529,7 @@ function SpecConfigurator({ initialUserInput, onComplete }: { initialUserInput: 
                 </div>
                 <div className="space-y-2"><span className="text-zinc-500 block text-xs uppercase tracking-wider font-bold">经验要求</span><span className={cn("block text-base font-medium", formData.exp_level !== '未指定' ? "text-emerald-400" : "text-zinc-500")}>{formData.exp_level}</span></div>
                 <div className="space-y-2"><span className="text-zinc-500 block text-xs uppercase tracking-wider font-bold">学历要求</span><span className={cn("block text-base font-medium", formData.education !== '未指定' ? "text-emerald-400" : "text-zinc-500")}>{formData.education}</span></div>
+                <div className="space-y-2"><span className="text-zinc-500 block text-xs uppercase tracking-wider font-bold">薪资待遇</span><span className={cn("block text-base font-medium", formData.remarks && formData.remarks !== formData.role ? "text-emerald-400" : "text-zinc-500")}>{formData.remarks === formData.role ? "等待输入..." : formData.remarks}</span></div>
                 <div className="space-y-2"><span className="text-zinc-500 block text-xs uppercase tracking-wider font-bold">软技能</span><div className="flex flex-wrap gap-2">{formData.culture_fit.length > 0 ? formData.culture_fit.map(s => <span key={s} className="text-purple-300 bg-purple-500/10 px-2 py-1 rounded-md border border-purple-500/20 text-xs">{s}</span>) : <span className="text-zinc-700 italic">...</span>}</div></div>
                 <div className="space-y-2"><span className="text-zinc-500 block text-xs uppercase tracking-wider font-bold">加分项</span><div className="flex flex-wrap gap-2">{formData.plus_points.length > 0 ? formData.plus_points.map(s => <span key={s} className="text-amber-300 bg-amber-500/10 px-2 py-1 rounded-md border border-amber-500/20 text-xs">{s}</span>) : <span className="text-zinc-700 italic">...</span>}</div></div>
               </div>
