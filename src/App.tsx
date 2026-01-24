@@ -205,44 +205,40 @@ export default function JobOSCmdDeck() {
       </div>
 
       {/* Cyber Navbar */}
-      <header className="fixed top-0 w-full z-50 h-24 px-8 flex items-center justify-between border-b border-white/5 bg-black/80 backdrop-blur-2xl transition-all duration-500 shadow-2xl">
+      <header className="fixed top-0 w-full z-50 h-20 px-8 flex items-center justify-between border-b border-white/5 bg-black/60 backdrop-blur-xl transition-all duration-500">
         <div className="flex items-center gap-4">
           {step !== 'IDLE' && (
             <button
               onClick={handleBack}
-              className="w-10 h-10 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center transition-colors border border-white/5 group"
+              className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center transition-colors border border-white/5 group"
             >
-              <ChevronLeft className="w-5 h-5 text-zinc-400 group-hover:text-white" />
+              <ChevronLeft className="w-4 h-4 text-zinc-400 group-hover:text-white" />
             </button>
           )}
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-[0_0_15px_rgba(99,102,241,0.3)]">
-              <Target className="w-5 h-5 text-white" />
+            <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
+              <Command className="w-5 h-5 text-white" />
             </div>
             <div className="tracking-tight leading-tight">
-              <div className="font-bold text-white text-sm">JOB OS <span className="text-indigo-400 font-mono text-[10px] ml-1">AI_AGENT</span></div>
-              <div className="text-[9px] text-zinc-500 uppercase tracking-widest font-mono">Operations Command</div>
+              <div className="font-bold text-white text-lg tracking-tight">JOB OS</div>
             </div>
           </div>
         </div>
 
-        {/* Central Status Indicator */}
-        <div className="absolute left-1/2 -translate-x-1/2 hidden md:flex items-center gap-4 py-1.5 px-6 rounded-full border border-white/5 bg-white/5 backdrop-blur-md shadow-2xl">
-          <div className="flex items-center gap-2">
-            <div className={cn("w-1.5 h-1.5 rounded-full animate-pulse", step === 'IDLE' ? 'bg-zinc-500' : 'bg-green-500')}></div>
-            <span className="text-[10px] font-mono uppercase text-zinc-400 tracking-wider">
-              {step === 'IDLE' ? 'System Standby' : (step === 'BRIEFING' ? 'Drafting Mission' : (step === 'INTERVIEW_PREP' ? 'Action Center Active' : 'Agents Active'))}
-            </span>
+        <div className="flex items-center gap-6">
+          <div className="flex items-center gap-2 text-xs text-zinc-500 font-medium">
+            <div className={cn("w-1.5 h-1.5 rounded-full", step === 'IDLE' ? "bg-zinc-600" : "bg-emerald-500")}></div>
+            {step === 'IDLE' ? 'System Ready' : 'Pipeline Active'}
           </div>
-        </div>
-
-        <div className="flex items-center gap-4">
-          <div className="flex flex-col items-end">
-            <span className="text-[10px] text-zinc-500 uppercase font-mono">Team Efficiency</span>
-            <span className="text-xs font-bold text-emerald-400 flex items-center gap-1">
-              <Activity className="w-3 h-3" />
-              500% Boost
-            </span>
+          <div className="h-4 w-[1px] bg-white/10"></div>
+          <div className="flex items-center gap-3">
+            <div className="text-right hidden sm:block">
+              <div className="text-xs font-bold text-white">HR Admin</div>
+              <div className="text-[10px] text-zinc-500">Enterprise Plan</div>
+            </div>
+            <div className="w-8 h-8 rounded-full bg-zinc-800 border border-white/10 flex items-center justify-center">
+              <User className="w-4 h-4 text-zinc-400" />
+            </div>
           </div>
         </div>
       </header>
@@ -328,15 +324,15 @@ function LandingPage({ onStart }: { onStart: (role: string) => void }) {
       </div>
 
       <div className="text-center max-w-6xl space-y-12 mb-24 relative z-10">
-        <h1 className="text-7xl md:text-9xl font-black text-white tracking-[-0.05em] leading-[0.95] drop-shadow-2xl">
-          一人即团队<br />
-          <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-300 via-white to-purple-300 animate-gradient-x">
-            全网搜寻人才
+        <h1 className="text-7xl md:text-8xl font-black text-white tracking-[-0.05em] leading-[1.1] drop-shadow-2xl">
+          简历筛选<br />
+          <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-white to-indigo-400 animate-gradient-x">
+            从未如此智能
           </span>
         </h1>
-        <p className="text-xl text-zinc-400 font-light max-w-2xl mx-auto leading-relaxed">
-          为 <span className="text-white font-medium">AI 超级个体</span> 打造的智能指挥系统。<br />
-          您负责决策 (1%)，AI 智能体负责搜寻与筛选 (99%)。
+        <p className="text-xl text-zinc-400 font-medium max-w-2xl mx-auto leading-relaxed">
+          将繁琐的初筛工作交给 AI。<br />
+          <span className="text-zinc-500 text-base mt-2 block">自动化流水线：岗位澄清 → 简历解析 → 智能排序 → 面试邀约</span>
         </p>
       </div>
 
@@ -378,17 +374,17 @@ function LandingPage({ onStart }: { onStart: (role: string) => void }) {
             type="submit"
             className="bg-white text-black hover:bg-indigo-50 hover:scale-105 hover:shadow-[0_0_40px_rgba(255,255,255,0.3)] px-12 h-20 rounded-2xl font-black text-xl tracking-[0.2em] transition-all shadow-[0_0_30px_rgba(255,255,255,0.1)] flex items-center gap-3 whitespace-nowrap active:scale-95 uppercase"
           >
-            开始搜寻
-            <ArrowRight className="w-6 h-6" />
+            开始筛选
+            <ArrowRight className="w-5 h-5" />
           </MagneticButton>
         </form>
 
         {/* Agent Status Bar */}
         <div className="mt-10 flex justify-center gap-10 opacity-60">
-          {['Deep Search Agent', 'Semantic Matcher', 'Outreach Bot'].map((agent, i) => (
-            <div key={agent} className="flex items-center gap-3 text-xs font-mono text-zinc-400 uppercase tracking-widest">
-              <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-              {agent} [ON]
+          {['Resume Reviewer', 'Capability Matcher', 'HR Assistant'].map((agent, i) => (
+            <div key={agent} className="flex items-center gap-3 text-xs font-bold text-zinc-500 uppercase tracking-widest">
+              <div className="w-2 h-2 rounded-full bg-indigo-500/50"></div>
+              {agent}
             </div>
           ))}
         </div>
@@ -424,7 +420,7 @@ const SOCRATIC_INTERVIEW_FLOW = [
     question: (_role: string, prev: StructuredJD) =>
       `好的，交付目标是：「${prev.remarks?.slice(0, 50) || '完成核心功能'}」\n\n` +
       `那么问题来了：**要完成这个目标，候选人必须精通的 2-3 项核心技术是什么？**\n\n` +
-      `⚠️ 注意：请只列出"没有就绝对不行"的技术，而不是"有了更好"的技术。\n` +
+      `注意：请只列出"没有就绝对不行"的技术，而不是"有了更好"的技术。\n` +
       `这两者的区别很重要 —— 前者是筛选门槛，后者是加分项。`,
     followUp: (input: string, prev: StructuredJD) => {
       const skills = input.split(/[,，、\s]+/).filter(s => s.length > 0);
@@ -650,14 +646,14 @@ function SpecConfigurator({ initialUserInput, onComplete }: { initialUserInput: 
         setChatStep(nextStep);
       } else {
         // Conversation complete - 生成画像摘要
-        const completionMsg = `🎯 **人才画像配置完成！**\n\n我已根据我们的对话生成了精准的筛选标准：\n\n` +
-          `**🎯 岗位**: ${updatedFormData.role}\n` +
-          `**💻 核心技能**: ${updatedFormData.stack.join(' / ') || '待确认'}\n` +
-          `**📊 经验定位**: ${updatedFormData.exp_level}\n` +
-          `**🧠 软技能**: ${updatedFormData.culture_fit.join('、') || '待确认'}\n` +
-          `**🚫 红线/加分项**: ${updatedFormData.plus_points.length > 0 ? updatedFormData.plus_points.join('、') : '无特殊要求'}\n\n` +
+        const completionMsg = `**人才画像配置完成**\n\n我已根据我们的对话生成了精准的筛选标准：\n\n` +
+          `**岗位**: ${updatedFormData.role}\n` +
+          `**核心技能**: ${updatedFormData.stack.join(' / ') || '待确认'}\n` +
+          `**经验定位**: ${updatedFormData.exp_level}\n` +
+          `**软技能**: ${updatedFormData.culture_fit.join('、') || '待确认'}\n` +
+          `**红线/加分项**: ${updatedFormData.plus_points.length > 0 ? updatedFormData.plus_points.join('、') : '无特殊要求'}\n\n` +
           `这套标准比传统 JD 更精准，因为它基于**实际交付场景**而非泛泛的技能清单。\n\n` +
-          `点击 **「执行全网搜寻」** 开始匹配，或切换 [Commander Form] 微调参数。`;
+          `点击 **「开始筛选」** 继续，或切换 [Commander Form] 微调参数。`;
         setMessages(prev => [...prev, { role: 'ai', text: completionMsg }]);
       }
       setIsAiThinking(false);
@@ -717,16 +713,16 @@ function SpecConfigurator({ initialUserInput, onComplete }: { initialUserInput: 
               {/* Left Column: Form */}
               <div className="space-y-10">
                 <div className="space-y-4">
-                  <Label icon={<Target className="w-4 h-4" />} text="MISSION TARGET (岗位)" />
+                  <Label icon={<Target className="w-4 h-4" />} text="目标岗位" />
                   <input
-                    className="w-full bg-black/40 border border-white/10 rounded-2xl px-6 py-4 text-lg text-white focus:ring-2 focus:ring-indigo-500/30 outline-none transition-all font-mono placeholder:text-zinc-700"
+                    className="w-full bg-black/40 border border-white/10 rounded-2xl px-6 py-4 text-lg text-white focus:ring-2 focus:ring-indigo-500/30 outline-none transition-all placeholder:text-zinc-700"
                     value={formData.role || ''}
                     onChange={e => setFormData({ ...formData, role: e.target.value })}
                   />
                 </div>
 
                 <div className="space-y-4">
-                  <Label icon={<Code2 className="w-4 h-4" />} text="MUST-HAVE STACK (硬技能)" />
+                  <Label icon={<Code2 className="w-4 h-4" />} text="核心技能 (Hard Skills)" />
                   <div className="min-h-[140px] p-6 bg-black/40 border border-white/10 rounded-2xl space-y-4 focus-within:ring-2 focus-within:ring-indigo-500/30 transition-all">
                     <div className="flex flex-wrap gap-3">
                       {formData.stack.map(s => (
@@ -755,10 +751,10 @@ function SpecConfigurator({ initialUserInput, onComplete }: { initialUserInput: 
               {/* Right Column: AI Preview & Remarks */}
               <div className="space-y-10">
                 <div className="space-y-4">
-                  <Label icon={<Vote className="w-4 h-4" />} text="CULTURE FIT (软技能)" />
+                  <Label icon={<Vote className="w-4 h-4" />} text="团队文化 (Soft Skills)" />
                   <div className="p-6 bg-black/40 border border-white/10 rounded-2xl flex flex-wrap gap-3 min-h-[80px]">
                     {formData.culture_fit.map(s => (
-                      <span key={s} className="px-3 py-1.5 rounded-lg bg-purple-500/10 text-purple-300 text-sm font-mono border border-purple-500/20">
+                      <span key={s} className="px-3 py-1.5 rounded-lg bg-purple-500/10 text-purple-300 text-sm border border-purple-500/20">
                         {s}
                       </span>
                     ))}
@@ -767,7 +763,7 @@ function SpecConfigurator({ initialUserInput, onComplete }: { initialUserInput: 
                 </div>
 
                 <div className="space-y-4">
-                  <Label icon={<Command className="w-4 h-4" />} text="EXTRA INSTRUCTIONS (指令)" />
+                  <Label icon={<Command className="w-4 h-4" />} text="补充指令 (Extra)" />
                   <textarea
                     className="w-full h-40 bg-black/40 border border-white/10 rounded-2xl px-6 py-4 text-sm text-zinc-300 focus:ring-2 focus:ring-indigo-500/30 outline-none transition-all font-mono resize-none leading-relaxed placeholder:text-zinc-700"
                     placeholder="// 告诉 AI 任何特殊的筛选偏好..."
@@ -852,43 +848,43 @@ function SpecConfigurator({ initialUserInput, onComplete }: { initialUserInput: 
               </div>
 
               {/* Live JSON Preview (AI Brain) */}
-              <div className="col-span-1 bg-black/60 border-l border-white/5 p-8 font-mono text-sm overflow-y-auto relative backdrop-blur-md">
+              <div className="col-span-1 bg-[#050505] border-l border-white/10 p-8 text-sm overflow-y-auto relative backdrop-blur-md">
                 <div className="absolute top-6 right-6 text-indigo-500 animate-pulse">
                   <Activity className="w-5 h-5" />
                 </div>
                 <h3 className="text-zinc-500 font-bold uppercase tracking-[0.2em] mb-8 text-xs flex items-center gap-2">
                   <div className="w-1.5 h-1.5 rounded-full bg-indigo-500"></div>
-                  Real-time Context
+                  实时岗位画像
                 </h3>
                 <div className="space-y-8">
                   <div className="space-y-2">
-                    <span className="text-zinc-600 block text-xs uppercase tracking-wider font-bold">Target Role</span>
+                    <span className="text-zinc-500 block text-xs uppercase tracking-wider font-bold">目标岗位</span>
                     <span className="text-white block bg-white/5 px-3 py-2 rounded-lg border border-white/5 text-base font-bold shadow-sm">{formData.role || '—'}</span>
                   </div>
                   <div className="space-y-2">
-                    <span className="text-zinc-600 block text-xs uppercase tracking-wider font-bold">Core Stack</span>
+                    <span className="text-zinc-500 block text-xs uppercase tracking-wider font-bold">核心技能</span>
                     <div className="flex flex-wrap gap-2">
-                      {formData.stack.length > 0 ? formData.stack.map(s => <span key={s} className="text-indigo-300 bg-indigo-500/10 px-2.5 py-1 rounded-md border border-indigo-500/20 text-xs font-bold shadow-[0_0_10px_rgba(99,102,241,0.1)]">{s}</span>) : <span className="text-zinc-800 italic"> waiting for input...</span>}
+                      {formData.stack.length > 0 ? formData.stack.map(s => <span key={s} className="text-indigo-300 bg-indigo-500/10 px-2.5 py-1 rounded-md border border-indigo-500/20 text-xs font-bold shadow-[0_0_10px_rgba(99,102,241,0.1)]">{s}</span>) : <span className="text-zinc-700 italic"> 等待输入...</span>}
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <span className="text-zinc-600 block text-xs uppercase tracking-wider font-bold">Experience</span>
-                    <span className={cn("block text-base font-medium", formData.exp_level !== '未指定' ? "text-emerald-400 drop-shadow-[0_0_8px_rgba(52,211,153,0.3)]" : "text-zinc-800")}>{formData.exp_level}</span>
+                    <span className="text-zinc-500 block text-xs uppercase tracking-wider font-bold">经验要求</span>
+                    <span className={cn("block text-base font-medium", formData.exp_level !== '未指定' ? "text-emerald-400 drop-shadow-[0_0_8px_rgba(52,211,153,0.3)]" : "text-zinc-500")}>{formData.exp_level}</span>
                   </div>
                   <div className="space-y-2">
-                    <span className="text-zinc-600 block text-xs uppercase tracking-wider font-bold">Education</span>
-                    <span className={cn("block text-base font-medium", formData.education !== '未指定' ? "text-emerald-400 drop-shadow-[0_0_8px_rgba(52,211,153,0.3)]" : "text-zinc-800")}>{formData.education}</span>
+                    <span className="text-zinc-500 block text-xs uppercase tracking-wider font-bold">学历要求</span>
+                    <span className={cn("block text-base font-medium", formData.education !== '未指定' ? "text-emerald-400 drop-shadow-[0_0_8px_rgba(52,211,153,0.3)]" : "text-zinc-500")}>{formData.education}</span>
                   </div>
                   <div className="space-y-2">
-                    <span className="text-zinc-600 block text-xs uppercase tracking-wider font-bold">Culture Fit</span>
+                    <span className="text-zinc-500 block text-xs uppercase tracking-wider font-bold">软技能</span>
                     <div className="flex flex-wrap gap-2">
-                      {formData.culture_fit.length > 0 ? formData.culture_fit.map(s => <span key={s} className="text-purple-300 bg-purple-500/10 px-2 py-1 rounded-md border border-purple-500/20 text-xs">{s}</span>) : <span className="text-zinc-800 italic">...</span>}
+                      {formData.culture_fit.length > 0 ? formData.culture_fit.map(s => <span key={s} className="text-purple-300 bg-purple-500/10 px-2 py-1 rounded-md border border-purple-500/20 text-xs">{s}</span>) : <span className="text-zinc-700 italic">...</span>}
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <span className="text-zinc-600 block text-xs uppercase tracking-wider font-bold">Plus Points</span>
+                    <span className="text-zinc-500 block text-xs uppercase tracking-wider font-bold">加分项/红线</span>
                     <div className="flex flex-wrap gap-2">
-                      {formData.plus_points.length > 0 ? formData.plus_points.map(s => <span key={s} className="text-amber-300 bg-amber-500/10 px-2 py-1 rounded-md border border-amber-500/20 text-xs">{s}</span>) : <span className="text-zinc-800 italic">...</span>}
+                      {formData.plus_points.length > 0 ? formData.plus_points.map(s => <span key={s} className="text-amber-300 bg-amber-500/10 px-2 py-1 rounded-md border border-amber-500/20 text-xs">{s}</span>) : <span className="text-zinc-700 italic">...</span>}
                     </div>
                   </div>
                 </div>
@@ -907,7 +903,7 @@ function SpecConfigurator({ initialUserInput, onComplete }: { initialUserInput: 
             onClick={() => onComplete(formData)}
             className="group bg-white text-black px-10 py-4 rounded-xl font-bold text-base hover:bg-zinc-200 transition-all flex items-center gap-3 shadow-[0_0_40px_rgba(255,255,255,0.15)] active:scale-95"
           >
-            执行全网搜寻
+            启动筛选引擎
             <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
           </MagneticButton>
         </div>
@@ -1006,14 +1002,13 @@ function ExecutionDashboard({ jd: _jd, onStartInterview }: { jd: StructuredJD, o
   useEffect(() => {
     if (phase === 'PROCESSING') {
       const sequence = [
-        "Agent-01: 初始化全网搜寻引擎...",
-        "Agent-01: 正在扫描人才库 (Deep Search)...",
-        "Agent-02: 提取语义特征向量 (Vectorization)...",
-        "Agent-02: 生成候选人能力画像...",
-        "Agent-03: 正在与 [MISSION_BRIEF] 进行交叉比对...",
-        "Agent-03: 发现高置信度匹配 (Confidence > 90%)...",
-        "System: 生成证据推理链 (Reasoning Chain)...",
-        "System: 渲染战术指挥面板..."
+        "[INFO] 正在阅读您上传的简历，理解候选人背景...",
+        "[SCAN] 正在比对 [MISSION_BRIEF] 核心需求...",
+        "[ANALYSIS] 提取核心能力向量 (技能/经验/潜力)...",
+        "[MATCH] 进行多维能力画像匹配...",
+        "[RESULT] 发现高潜力候选人 (置信度 > 90%)...",
+        "[GENERATE] 正在为您生成推荐理由与面试建议...",
+        "[READY] 准备就绪，正在开启人才匹配驾驶舱..."
       ];
 
       let i = 0;
@@ -1037,6 +1032,7 @@ function ExecutionDashboard({ jd: _jd, onStartInterview }: { jd: StructuredJD, o
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<number>(0);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -1202,7 +1198,7 @@ function ExecutionDashboard({ jd: _jd, onStartInterview }: { jd: StructuredJD, o
               )}
             >
               <Cpu className="w-5 h-5" />
-              激活 AI 智能体解析 ({uploadedFiles.length} 份)
+              激活与解析简历 ({uploadedFiles.length} 份)
             </button>
           </div>
         </div>
@@ -1215,7 +1211,7 @@ function ExecutionDashboard({ jd: _jd, onStartInterview }: { jd: StructuredJD, o
       <div className="h-full flex flex-col items-center justify-center p-8 font-mono">
         <div className="w-full max-w-3xl bg-black rounded-3xl border border-white/10 p-2 font-mono text-sm overflow-hidden shadow-2xl animate-in zoom-in-95 duration-500">
           <div className="bg-white/5 px-6 py-4 border-b border-white/5 flex justify-between items-center rounded-t-2xl">
-            <span className="text-zinc-400 font-bold tracking-wider">AGENT_LOG_STREAM</span>
+            <span className="text-zinc-400 font-bold tracking-wider">AI_THOUGHT_PROCESS</span>
             <div className="flex gap-2">
               <span className="w-2.5 h-2.5 rounded-full bg-red-500/20"></span>
               <span className="w-2.5 h-2.5 rounded-full bg-yellow-500/20"></span>
@@ -1240,8 +1236,7 @@ function ExecutionDashboard({ jd: _jd, onStartInterview }: { jd: StructuredJD, o
     );
   }
 
-  // 展开状态
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+
 
   return (
     <div className="h-full flex flex-col max-w-7xl mx-auto p-8 relative z-20 overflow-y-auto">
@@ -1260,168 +1255,196 @@ function ExecutionDashboard({ jd: _jd, onStartInterview }: { jd: StructuredJD, o
       <div className="space-y-4 flex-1">
         <h3 className="text-sm font-black text-zinc-500 uppercase tracking-[0.2em] ml-2 mb-6 flex items-center gap-3">
           <div className="w-2 h-2 bg-indigo-500 rounded-full animate-pulse"></div>
-          Top Candidates (Evidence Based)
+          候选人匹配列表 (AI 推荐)
         </h3>
-        {candidates.map((c, i) => {
-          const isExpanded = expandedId === c.id;
-          return (
-            <motion.div
-              key={c.id}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.1 }}
-            >
-              <SpotlightCard className="group rounded-[2rem]">
-                {/* 主卡片区域 */}
-                <div
-                  onClick={() => setExpandedId(isExpanded ? null : c.id)}
-                  className={cn(
-                    "p-8 cursor-pointer transition-all duration-300 relative z-10",
-                    isExpanded ? "bg-white/[0.06] border-b border-white/5" : "hover:bg-white/[0.02]"
-                  )}
-                >
-                  <div className="absolute top-0 left-0 w-1.5 h-full bg-gradient-to-b from-indigo-500 to-transparent opacity-0 group-hover:opacity-100 transition-opacity rounded-l-2xl"></div>
+        {candidates.length > 0 ? (
+          [...candidates].sort((a, b) => b.match_score - a.match_score).map((c, i) => {
+            const isExpanded = expandedId === c.id;
+            return (
+              <motion.div
+                key={c.id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.1 }}
+              >
+                <SpotlightCard className="group rounded-[2rem]">
+                  {/* 主卡片区域 */}
+                  <div
+                    onClick={() => setExpandedId(isExpanded ? null : c.id)}
+                    className={cn(
+                      "p-8 cursor-pointer transition-all duration-300 relative z-10",
+                      isExpanded ? "bg-white/[0.06] border-b border-white/5" : "hover:bg-white/[0.02]"
+                    )}
+                  >
+                    <div className="absolute top-0 left-0 w-1.5 h-full bg-gradient-to-b from-indigo-500 to-transparent opacity-0 group-hover:opacity-100 transition-opacity rounded-l-2xl"></div>
 
-                  <div className="flex gap-10 items-start">
-                    {/* Score Badge */}
-                    <div className="w-28 shrink-0 flex flex-col items-center justify-center border-r border-white/5 pr-10 py-2">
-                      <div className="text-5xl font-black text-white tracking-tighter shadow-indigo-500/50 drop-shadow-lg">{c.match_score}</div>
-                      <div className="text-[10px] text-zinc-500 uppercase tracking-[0.2em] mt-2 font-bold">Match Score</div>
-                    </div>
-
-                    {/* Main Info */}
-                    <div className="flex-1 space-y-5">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-4">
-                          <h4 className="text-3xl font-bold text-white tracking-tight">{c.name}</h4>
-                          <ChevronDown className={cn("w-5 h-5 text-zinc-500 transition-transform duration-300", isExpanded && "rotate-180")} />
-                        </div>
-                        <div className="flex gap-2">
-                          {c.tags.map(t => <span key={t} className="px-3 py-1 rounded-full bg-black/40 border border-white/10 text-xs text-zinc-400 font-mono tracking-wide">{t}</span>)}
-                        </div>
+                    <div className="flex gap-10 items-start">
+                      {/* Score Badge */}
+                      <div className="w-28 shrink-0 flex flex-col items-center justify-center border-r border-white/5 pr-10 py-2">
+                        <div className="text-5xl font-black text-white tracking-tighter shadow-indigo-500/50 drop-shadow-lg">{c.match_score}</div>
+                        <div className="text-[10px] text-zinc-500 uppercase tracking-[0.2em] mt-2 font-bold">Match Score</div>
                       </div>
 
-                      <div className="p-5 bg-indigo-500/5 border border-indigo-500/10 rounded-2xl relative overflow-hidden group-hover:bg-indigo-500/10 transition-colors">
-                        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-500/30 to-transparent"></div>
-                        <div className="flex items-center gap-3 text-xs font-black text-indigo-400 uppercase tracking-widest mb-2">
-                          <Zap className="w-4 h-4" /> AI Reasoning
-                        </div>
-                        <p className="text-base text-indigo-100/90 leading-relaxed font-medium">
-                          {c.ai_analysis}
-                        </p>
-                      </div>
-
-                      {/* Evidence Preview */}
-                      {!isExpanded && (
-                        <div className="pt-2 pl-2">
-                          <div className="text-xs text-zinc-500 font-mono flex items-center gap-3">
-                            <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                            <span className="text-emerald-400/80">Verified Proof:</span>
-                            <span className="text-zinc-400 italic">"{c.evidence_logs[0].source_context}"</span>
+                      {/* Main Info */}
+                      <div className="flex-1 space-y-5">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-4">
+                            <h4 className="text-3xl font-bold text-white tracking-tight">{c.name}</h4>
+                            <ChevronDown className={cn("w-5 h-5 text-zinc-500 transition-transform duration-300", isExpanded && "rotate-180")} />
+                          </div>
+                          <div className="flex gap-2">
+                            {c.tags.map(t => <span key={t} className="px-3 py-1 rounded-full bg-black/40 border border-white/10 text-xs text-zinc-400 font-mono tracking-wide">{t}</span>)}
                           </div>
                         </div>
-                      )}
-                    </div>
 
-                    {/* Actions */}
-                    <div className="w-40 shrink-0 flex flex-col gap-3 justify-center border-l border-white/5 pl-10 h-full py-4">
-                      <button
-                        onClick={(e) => { e.stopPropagation(); onStartInterview(c); }}
-                        className="w-full py-3 bg-white text-black text-sm font-bold rounded-xl hover:bg-zinc-200 transition-colors shadow-lg active:scale-95"
-                      >
-                        发送面试
-                      </button>
-                      <button
-                        onClick={(e) => e.stopPropagation()}
-                        className="w-full py-3 bg-transparent border border-white/10 text-zinc-400 text-sm font-bold rounded-xl hover:bg-white/5 transition-colors active:scale-95"
-                      >
-                        拒绝
-                      </button>
+                        <div className="p-5 bg-indigo-500/5 border border-indigo-500/10 rounded-2xl relative overflow-hidden group-hover:bg-indigo-500/10 transition-colors">
+                          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-500/30 to-transparent"></div>
+                          <div className="flex items-center gap-3 text-xs font-black text-indigo-400 uppercase tracking-widest mb-2">
+                            <Zap className="w-4 h-4" /> AI 推荐理由
+                          </div>
+                          <p className="text-base text-indigo-100/90 leading-relaxed font-medium font-sans">
+                            {c.ai_analysis}
+                          </p>
+                        </div>
+
+                        {/* Evidence Preview */}
+                        {!isExpanded && (
+                          <div className="pt-2 pl-2">
+                            <div className="text-xs text-zinc-500 font-mono flex items-center gap-3">
+                              <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                              <span className="text-emerald-400/80">原文证据:</span>
+                              <span className="text-zinc-400 italic">"{c.evidence_logs[0].source_context}"</span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Actions */}
+                      <div className="w-40 shrink-0 flex flex-col gap-3 justify-center border-l border-white/5 pl-10 h-full py-4">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); onStartInterview(c); }}
+                          className="w-full py-3 bg-white text-black text-sm font-bold rounded-xl hover:bg-zinc-200 transition-colors shadow-lg active:scale-95"
+                        >
+                          发送面试
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setCandidates(prev => prev.filter(candidate => candidate.id !== c.id));
+                          }}
+                          className="w-full py-3 bg-transparent border border-white/10 text-zinc-400 text-sm font-bold rounded-xl hover:bg-white/5 hover:text-red-400 hover:border-red-500/30 transition-colors active:scale-95"
+                        >
+                          拒绝
+                        </button>
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                {/* 展开的详情面板 */}
-                <AnimatePresence>
-                  {isExpanded && (
-                    <motion.div
-                      initial={{ height: 0, opacity: 0 }}
-                      animate={{ height: 'auto', opacity: 1 }}
-                      exit={{ height: 0, opacity: 0 }}
-                      transition={{ duration: 0.3 }}
-                      className="overflow-hidden"
-                    >
-                      <div className="grid grid-cols-2 gap-6 p-8 bg-black/20 border-t border-white/5">
-                        {/* 左侧：简历原文高亮 */}
-                        <div className="space-y-4">
-                          <h5 className="text-xs font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2">
-                            <FileText className="w-4 h-4" />
-                            简历关键信息
-                          </h5>
-                          <div className="bg-black/40 border border-white/5 rounded-xl p-5 space-y-4 font-mono text-sm">
-                            <div className="space-y-1">
-                              <span className="text-zinc-600 text-xs">联系邮箱</span>
-                              <div className="text-indigo-400">{c.email}</div>
-                            </div>
-                            <div className="space-y-1">
-                              <span className="text-zinc-600 text-xs">技能标签</span>
-                              <div className="flex flex-wrap gap-2">
-                                {c.tags.map(t => (
-                                  <span key={t} className="px-2 py-1 bg-indigo-500/10 text-indigo-300 rounded text-xs border border-indigo-500/20">{t}</span>
-                                ))}
+                  {/* 展开的详情面板 */}
+                  <AnimatePresence>
+                    {isExpanded && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.3 }}
+                        className="overflow-hidden"
+                      >
+                        <div className="grid grid-cols-2 gap-6 p-8 bg-black/20 border-t border-white/5">
+                          {/* 左侧：简历原文高亮 */}
+                          <div className="space-y-4">
+                            <h5 className="text-xs font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2">
+                              <FileText className="w-4 h-4" />
+                              简历关键信息
+                            </h5>
+                            <div className="bg-black/40 border border-white/5 rounded-xl p-5 space-y-4 font-sans text-sm">
+                              <div className="space-y-1">
+                                <span className="text-zinc-600 text-xs">联系邮箱</span>
+                                <div className="text-indigo-400">{c.email}</div>
                               </div>
-                            </div>
-                            <div className="space-y-1">
-                              <span className="text-zinc-600 text-xs">核心亮点 (AI 提取)</span>
-                              <div className="text-zinc-300 leading-relaxed">
-                                {c.evidence_logs.map(e => e.source_context).join(' · ')}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* 右侧：完整证据链 */}
-                        <div className="space-y-4">
-                          <h5 className="text-xs font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2">
-                            <ShieldCheck className="w-4 h-4" />
-                            完整证据链 ({c.evidence_logs.length} 条)
-                          </h5>
-                          <div className="space-y-3">
-                            {c.evidence_logs.map((ev, idx) => (
-                              <div key={idx} className="bg-black/40 border border-white/5 rounded-xl p-4 relative overflow-hidden">
-                                <div className="absolute top-0 left-0 w-1 h-full" style={{
-                                  backgroundColor: ev.confidence > 90 ? 'rgb(52, 211, 153)' : ev.confidence > 70 ? 'rgb(251, 191, 36)' : 'rgb(239, 68, 68)'
-                                }}></div>
-                                <div className="flex justify-between items-start mb-2">
-                                  <span className="text-xs font-bold text-indigo-400 uppercase">{ev.requirement}</span>
-                                  <span className={cn(
-                                    "text-xs font-mono px-2 py-0.5 rounded",
-                                    ev.confidence > 90 ? "bg-emerald-500/20 text-emerald-400" :
-                                      ev.confidence > 70 ? "bg-amber-500/20 text-amber-400" : "bg-red-500/20 text-red-400"
-                                  )}>
-                                    置信度 {ev.confidence}%
-                                  </span>
+                              <div className="space-y-1">
+                                <span className="text-zinc-600 text-xs">技能标签</span>
+                                <div className="flex flex-wrap gap-2">
+                                  {c.tags.map(t => (
+                                    <span key={t} className="px-2 py-1 bg-indigo-500/10 text-indigo-300 rounded text-xs border border-indigo-500/20">{t}</span>
+                                  ))}
                                 </div>
-                                <p className="text-zinc-300 text-sm leading-relaxed mb-2">
-                                  "{ev.source_context}"
-                                </p>
-                                <p className="text-zinc-500 text-xs italic">
-                                  💡 {ev.reasoning_trace}
-                                </p>
                               </div>
-                            ))}
+                              <div className="space-y-1">
+                                <span className="text-zinc-600 text-xs">核心亮点 (AI 提取)</span>
+                                <div className="text-zinc-300 leading-relaxed">
+                                  {c.evidence_logs.map(e => e.source_context).join(' · ')}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* 右侧：完整证据链 */}
+                          <div className="space-y-4">
+                            <h5 className="text-xs font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2">
+                              <ShieldCheck className="w-4 h-4" />
+                              完整证据链 ({c.evidence_logs.length} 条)
+                            </h5>
+                            <div className="space-y-3 font-sans">
+                              {c.evidence_logs.map((ev, idx) => (
+                                <div key={idx} className="bg-black/40 border border-white/5 rounded-xl p-4 relative overflow-hidden">
+                                  <div className="absolute top-0 left-0 w-1 h-full" style={{
+                                    backgroundColor: ev.confidence > 90 ? 'rgb(52, 211, 153)' : ev.confidence > 70 ? 'rgb(251, 191, 36)' : 'rgb(239, 68, 68)'
+                                  }}></div>
+                                  <div className="flex justify-between items-start mb-2">
+                                    <span className="text-xs font-bold text-indigo-400 uppercase">{ev.requirement}</span>
+                                    <span className={cn(
+                                      "text-xs font-mono px-2 py-0.5 rounded",
+                                      ev.confidence > 90 ? "bg-emerald-500/20 text-emerald-400" :
+                                        ev.confidence > 70 ? "bg-amber-500/20 text-amber-400" : "bg-red-500/20 text-red-400"
+                                    )}>
+                                      置信度 {ev.confidence}%
+                                    </span>
+                                  </div>
+                                  <p className="text-zinc-300 text-sm leading-relaxed mb-2">
+                                    "{ev.source_context}"
+                                  </p>
+                                  <p className="text-zinc-500 text-xs italic">
+                                    💡 {ev.reasoning_trace}
+                                  </p>
+                                </div>
+                              ))}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </SpotlightCard>
-            </motion.div>
-          );
-        })}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </SpotlightCard>
+              </motion.div>
+            );
+          })
+        ) : (
+          <FriendlyEmptyState onRetry={() => setPhase('INGEST')} />
+        )}
       </div >
     </div >
+  );
+}
+
+function FriendlyEmptyState({ onRetry }: { onRetry: () => void }) {
+  return (
+    <div className="flex flex-col items-center justify-center h-[50vh] text-center space-y-6 animate-in fade-in zoom-in-95 duration-500 mt-12 bg-white/[0.02] border border-white/5 rounded-3xl p-12">
+      <div className="w-24 h-24 bg-indigo-500/10 rounded-full flex items-center justify-center border border-indigo-500/20 shadow-[0_0_60px_rgba(99,102,241,0.15)]">
+        <User className="w-10 h-10 text-indigo-400 opacity-60" />
+      </div>
+      <div className="space-y-3">
+        <h3 className="text-2xl font-bold text-white tracking-tight">暂无完美匹配的候选人</h3>
+        <p className="text-zinc-400 max-w-md mx-auto text-base leading-relaxed">
+          AI 已阅览所有简历，但未发现高度契合的候选人。您可以尝试调整筛选标准（如放宽硬技能要求）。
+        </p>
+      </div>
+      <div className="pt-4">
+        <MagneticButton onClick={onRetry} className="bg-white text-black px-10 py-4 rounded-xl font-bold text-sm hover:bg-zinc-200 transition-colors shadow-lg active:scale-95">
+          重新配置标准
+        </MagneticButton>
+      </div>
+    </div>
   );
 }
 
@@ -1437,7 +1460,7 @@ function InterviewPanel({ candidates }: { candidates: Candidate[] }) {
       {/* 4.1 Shortlist Sidebar */}
       <div className="w-80 shrink-0 bg-white/[0.02] border border-white/10 rounded-3xl p-6 overflow-y-auto">
         <h3 className="text-xs font-black text-zinc-500 uppercase tracking-[0.2em] mb-6 flex items-center gap-2">
-          <ListFilter className="w-3.5 h-3.5" /> Shortlist Queue
+          <ListFilter className="w-3.5 h-3.5" /> 面试候选队列
         </h3>
         <div className="space-y-2">
           {candidates.map(c => (
@@ -1578,13 +1601,13 @@ function EmailComposer({ candidate }: { candidate: Candidate }) {
           onClick={() => setTemplate('INVITE')}
           className={cn("px-6 py-2 rounded-full border text-xs font-bold transition-all", template === 'INVITE' ? "bg-emerald-500/20 border-emerald-500 text-emerald-400" : "border-white/10 text-zinc-500 hover:bg-white/5")}
         >
-          👏 面试邀请
+          面试邀请
         </button>
         <button
           onClick={() => setTemplate('REJECT')}
           className={cn("px-6 py-2 rounded-full border text-xs font-bold transition-all", template === 'REJECT' ? "bg-red-500/20 border-red-500 text-red-400" : "border-white/10 text-zinc-500 hover:bg-white/5")}
         >
-          🙅‍♂️ 委婉拒绝
+          委婉拒绝
         </button>
       </div>
 
