@@ -492,7 +492,7 @@ function SpecConfigurator({ initialUserInput, onComplete }: { initialUserInput: 
                 {quickReplies.length > 0 && !isAiThinking && (
                   <div className="flex flex-wrap gap-2 ml-16">
                     {quickReplies.map((qr, i) => (
-                      <button key={i} onClick={() => handleChatSubmit(undefined, qr)} className="px-4 py-2 bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/30 text-indigo-300 rounded-full text-sm transition-all">{qr}</button>
+                      <button key={i} onClick={() => setChatInput(prev => prev ? prev + " " + qr : qr)} className="px-4 py-2 bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/30 text-indigo-300 rounded-full text-sm transition-all">{qr}</button>
                     ))}
                   </div>
                 )}
