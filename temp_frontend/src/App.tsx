@@ -385,16 +385,19 @@ function SpecConfigurator({ initialUserInput, onComplete }: { initialUserInput: 
   }, [messages]);
 
   const updateFormData = (info: any) => {
+    // Helper to ensure array
+    const toArray = (val: any) => Array.isArray(val) ? val : (typeof val === 'string' ? val.split(/[,，]/) : []);
+
     setFormData(prev => ({
       ...prev,
       role: info.role || prev.role,
-      stack: info.core_skills || prev.stack,
+      stack: info.core_skills ? toArray(info.core_skills) : prev.stack,
       exp_level: info.exp_years || prev.exp_level,
       // Map 'soft_skills' or 'culture_fit' from backend to frontend 'culture_fit'
-      culture_fit: info.soft_skills || info.culture_fit || prev.culture_fit,
+      culture_fit: (info.soft_skills || info.culture_fit) ? toArray(info.soft_skills || info.culture_fit) : prev.culture_fit,
       education: info.education || prev.education,
       // Map 'bonus' or 'plus_points' from backend to frontend 'plus_points'
-      plus_points: info.bonus || info.plus_points || prev.plus_points,
+      plus_points: (info.bonus || info.plus_points) ? toArray(info.bonus || info.plus_points) : prev.plus_points,
       // Map 'salary' from backend to frontend 'remarks'
       remarks: info.salary || prev.remarks
     }));
@@ -454,7 +457,7 @@ function SpecConfigurator({ initialUserInput, onComplete }: { initialUserInput: 
         culture_fit: formData.culture_fit, // Keep chat gathered soft skills
         education: formData.education,
         plus_points: jd.bonus_skills,
-        remarks: JSON.stringify(jd.salary) // Embedding salary in remarks for now
+        remarks: jd.salary?.range ? `${jd.salary.range} (${jd.salary.tax_type || '税前'})` : (jd.salary?.description || "面议")
       };
       onComplete(finalJd);
     } catch (e) {
