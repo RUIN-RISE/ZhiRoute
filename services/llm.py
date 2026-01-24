@@ -12,29 +12,46 @@ from .models import ClarificationQuestion, ClarificationResponse, JobDefinition,
 
 # Multi-model configuration with automatic fallback
 # Multi-model configuration with automatic fallback
-# API Key should be set in environment variables
-API_KEY = os.environ.get("MS_API_KEY") 
-if not API_KEY:
-    print("Warning: MS_API_KEY not found in environment variables.")
-    # Fallback/Placeholder if needed, or keep empty to fail fast
-    # API_KEY = "ms-..." 
+# API Keys
+MS_API_KEY = os.environ.get("MS_API_KEY")
+SILICON_API_KEY = os.environ.get("SILICON_API_KEY")
 
-BASE_URL = "https://api-inference.modelscope.cn/v1"
+if not MS_API_KEY:
+    print("Warning: MS_API_KEY not found.")
+if not SILICON_API_KEY:
+    print("Warning: SILICON_API_KEY not found.")
 
-# Available models in order of preference (GLM first)
+# Configuration for multi-provider support
+# Available models in order of preference
 MODEL_CONFIGS = [
-    {"id": "ZhipuAI/GLM-4.7", "name": "GLM-4.7"},
-    {"id": "deepseek-ai/DeepSeek-V3.2", "name": "DeepSeek-V3.2"},
-    {"id": "Qwen/Qwen3-235B-A22B-Instruct-2507", "name": "Qwen3"},
+    {
+        "id": "moonshotai/Kimi-K2-Instruct-0905",
+        "name": "Kimi-K2 (SiliconFlow)",
+        "base_url": "https://api.siliconflow.cn/v1",
+        "api_key": SILICON_API_KEY
+    },
+    {
+        "id": "ZhipuAI/GLM-4.7",
+        "name": "GLM-4.7 (ModelScope)",
+        "base_url": "https://api-inference.modelscope.cn/v1",
+        "api_key": MS_API_KEY
+    },
+    {
+        "id": "deepseek-ai/DeepSeek-V3.2",
+        "name": "DeepSeek-V3.2 (ModelScope)",
+        "base_url": "https://api-inference.modelscope.cn/v1",
+        "api_key": MS_API_KEY
+    },
+    {
+        "id": "Qwen/Qwen3-235B-A22B-Instruct-2507",
+        "name": "Qwen3 (ModelScope)",
+        "base_url": "https://api-inference.modelscope.cn/v1",
+        "api_key": MS_API_KEY
+    },
 ]
 
-# Track current model index (starts with first = MiniMax)
+# Track current model index (starts with first = Kimi)
 current_model_idx = 0
-
-client = OpenAI(
-    base_url=BASE_URL,
-    api_key=API_KEY
-)
 
 SYSTEM_PROMPT = """你是一个专业的招聘专家助手 Copilot。你的任务是帮助没有专业HR的小公司进行招聘流程。
 输出必须严格遵守 JSON 格式，不要包含Markdown代码块标记（如 ```json ... ```），直接输出纯JSON字符串。
@@ -46,19 +63,35 @@ def _call_llm(messages: List[Dict], timeout: float = 60.0) -> str:
     # Try each model starting from current
     for attempt in range(len(MODEL_CONFIGS)):
         model_idx = (current_model_idx + attempt) % len(MODEL_CONFIGS)
-        model = MODEL_CONFIGS[model_idx]
+        model_conf = MODEL_CONFIGS[model_idx]
         
-        print(f"[LLM] Using {model['name']} (timeout={timeout}s)...")
+        # Skip if API key is missing for this provider
+        if not model_conf["api_key"]:
+            print(f"[LLM] Skipping {model_conf['name']} (No API Key)")
+            if attempt < len(MODEL_CONFIGS) - 1:
+                current_model_idx = (model_idx + 1) % len(MODEL_CONFIGS) # Move to next model for next attempt
+                continue
+            else:
+                return "{}"
+        
+        print(f"[LLM] Using {model_conf['name']} (timeout={timeout}s)...")
         
         try:
+            # Instantiate client per call to support different base_urls
+            # Optimized: In production, we could cache clients per provider
+            client = OpenAI(
+                base_url=model_conf["base_url"],
+                api_key=model_conf["api_key"]
+            )
+            
             response = client.chat.completions.create(
-                model=model["id"],
+                model=model_conf["id"],
                 messages=messages,
                 stream=False,
                 timeout=timeout
             )
             content = response.choices[0].message.content
-            print(f"[LLM] {model['name']} responded: {len(content)} chars")
+            print(f"[LLM] {model_conf['name']} responded: {len(content)} chars")
             
             if content.startswith("```"):
                 content = content.replace("```json", "").replace("```", "")
@@ -66,15 +99,11 @@ def _call_llm(messages: List[Dict], timeout: float = 60.0) -> str:
             
         except Exception as e:
             error_msg = str(e).lower()
-            print(f"[LLM] {model['name']} Error: {e}")
+            print(f"[LLM] {model_conf['name']} Error: {e}")
             
-            # Check if it's a rate limit / quota error
-            if "limit" in error_msg or "quota" in error_msg or "429" in error_msg:
-                print(f"[LLM] {model['name']} reached limit, switching to next model...")
-                current_model_idx = (model_idx + 1) % len(MODEL_CONFIGS)
-                continue
-            
-            # For other errors, also try next model
+            # Switch to next model on error
+            print(f"[LLM] Switching to next model...")
+            current_model_idx = (model_idx + 1) % len(MODEL_CONFIGS)
             continue
     
     print("[LLM] All models failed!")
