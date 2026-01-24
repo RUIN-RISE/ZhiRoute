@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI HR 智能招聘助手</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+
+<body>
+    <div class="app-container">
+        <!-- Sidebar Navigation -->
+        <nav class="sidebar">
+            <div class="logo">
+                <i class="fa-solid fa-atom"></i>
+                <span>TalentAI</span>
+            </div>
+            <ul class="nav-links">
+                <li class="active" data-target="jd-generator">
+                    <i class="fa-solid fa-file-pen"></i>
+                    <span>JD生成器</span>
+                </li>
+                <li data-target="candidate-screen">
+                    <i class="fa-solid fa-users-viewfinder"></i>
+                    <span>候选人筛选</span>
+                </li>
+                <li data-target="interview-process">
+                    <i class="fa-regular fa-calendar-check"></i>
+                    <span>面试推进</span>
+                </li>
+            </ul>
+            <div class="user-profile">
+                <div class="avatar">HR</div>
+                <div class="user-info">
+                    <span class="name">招聘负责人</span>
+                    <span class="role">企业管理员</span>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+
+            <!-- VIEW 1: JD GENERATOR -->
+            <section id="jd-generator" class="view-section active">
+                <header class="section-header">
+                    <h1>智能岗位描述(JD)生成</h1>
+                    <p>利用AI快速构建精准、专业的岗位描述，提升招聘效率。</p>
+                </header>
+
+                <div class="jd-container glass-panel">
+                    <!-- Mode Switcher -->
+                    <div class="mode-switcher">
+                        <span class="mode-label">生成模式：</span>
+                        <div class="switch-toggle">
+                            <input type="radio" id="mode-a" name="jd-mode" value="a" checked>
+                            <label for="mode-a">对话引导模式</label>
+                            <input type="radio" id="mode-b" name="jd-mode" value="b">
+                            <label for="mode-b">结构化配置模式</label>
+                            <div class="toggle-slider"></div>
+                        </div>
+                    </div>
+
+                    <div class="mode-content-wrapper">
+                        <!-- Mode A: Chat Interface -->
+                        <div id="mode-a-content" class="mode-content active">
+                            <div class="chat-interface">
+                                <div class="chat-history" id="chat-history">
+                                    <div class="message ai-message">
+                                        <div class="message-avatar"><i class="fa-solid fa-robot"></i></div>
+                                        <div class="message-text">您好！我是您的AI招聘助手。请告诉我您想招聘什么岗位？对于该岗位的主要职责和理想候选人有什么大概的想法吗？
+                                        </div>
+                                    </div>
+                                    <!-- Messages will be added here -->
+                                </div>
+                                <div class="chat-input-area">
+                                    <input type="text" id="chat-input"
+                                        placeholder="例如：我们需要招聘一位有5年经验的高级Java工程师，负责高并发系统设计..."
+                                        onkeypress="handleChatInput(event)">
+                                    <button class="btn-send" onclick="sendChatMessage()"><i
+                                            class="fa-solid fa-paper-plane"></i></button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Mode B: Structured Form -->
+                        <div id="mode-b-content" class="mode-content">
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label>岗位类型</label>
+                                    <select id="job-type-select" class="form-control" onchange="enableTemplateButton()">
+                                        <option value="" disabled selected>请选择岗位类型...</option>
+                                        <option value="frontend">前端开发工程师</option>
+                                        <option value="backend">后端开发工程师</option>
+                                        <option value="product">产品经理</option>
+                                        <option value="design">UI/UX 设计师</option>
+                                        <option value="sales">销售经理</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>关键能力与职责 <button id="btn-template" class="btn-text" disabled
+                                            onclick="fillTemplate()"><i class="fa-solid fa-wand-magic-sparkles"></i>
+                                            智能填充模板</button></label>
+                                    <div id="structured-questions-container">
+                                        <!-- Instructions for user initially -->
+                                        <div
+                                            style="color:var(--text-muted); font-size:0.9rem; padding:10px; border:1px dashed var(--border-color); border-radius:8px;">
+                                            <i class="fa-solid fa-arrow-up"></i> 请先选择上方的岗位类型，然后点击“智能填充模板”以获取针对性问题。
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="form-group full-width">
+                                    <label>个性化备注</label>
+                                    <textarea class="form-control" rows="3"
+                                        placeholder="例如：我们是一家扁平化管理的初创公司，重视创新精神..."></textarea>
+                                </div>
+                            </div>
+                            <div class="action-bar">
+                                <button class="btn-primary" onclick="generateJDFromForm()">生成 JD</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- JD Preview Area -->
+                    <div class="jd-preview-area" id="jd-preview-section" style="display:none;">
+                        <h3 class="preview-title"><i class="fa-regular fa-file-alt"></i> JD 预览</h3>
+                        <div class="preview-content" id="jd-preview-text">
+                            <!-- Generated Content -->
+                        </div>
+                        <div class="preview-actions">
+                            <button class="btn-secondary" onclick="regenerateJD()"><i
+                                    class="fa-solid fa-rotate-right"></i> 重新生成</button>
+                            <button class="btn-primary" onclick="publishJD()"><i class="fa-solid fa-check"></i>
+                                确认发布</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- VIEW 2: CANDIDATE SCREEN -->
+            <section id="candidate-screen" class="view-section">
+                <header class="section-header">
+                    <h1>候选人智能筛选</h1>
+                    <p>AI自动解析简历，匹配JD契合度，助您快速锁定人才。</p>
+                </header>
+
+                <div class="upload-status-bar glass-panel">
+                    <div class="progress-section">
+                        <div class="progress-info">
+                            <span>简历解析中...</span>
+                            <span class="percentage">85%</span>
+                        </div>
+                        <div class="progress-bar-track">
+                            <div class="progress-bar-fill" style="width: 85%;"></div>
+                        </div>
+                    </div>
+                    <div class="upload-controls">
+                        <button class="btn-icon" title="暂停"><i class="fa-solid fa-pause"></i></button>
+                        <button class="btn-icon" title="取消"><i class="fa-solid fa-xmark"></i></button>
+                    </div>
+                    <div class="upload-actions">
+                        <button class="btn-secondary small"><i class="fa-solid fa-cloud-arrow-up"></i> 继续上传</button>
+                        <button class="btn-danger small"><i class="fa-regular fa-trash-can"></i> 删除</button>
+                    </div>
+                </div>
+
+                <div class="filter-bar glass-panel">
+                    <div class="filter-group">
+                        <input type="text" class="form-control" placeholder="调整权重 (例: 更看重经验)">
+                    </div>
+                    <div class="filter-group">
+                        <select class="form-control">
+                            <option>学历要求</option>
+                            <option>本科及以上</option>
+                            <option>硕士及以上</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <select class="form-control">
+                            <option>专业背景</option>
+                            <option>计算机相关</option>
+                            <option>设计相关</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="candidates-list">
+                    <!-- Candidate Card 1 -->
+                    <div class="candidate-card glass-panel">
+                        <div class="card-left">
+                            <div class="match-score high">92%</div>
+                            <div class="avatar-placeholder"><i class="fa-solid fa-user"></i></div>
+                            <div class="info">
+                                <h3>张伟 <span class="tag">资深</span></h3>
+                                <p class="summary">7年全栈开发经验，精通架构设计，有大厂背景。</p>
+                                <ul class="details">
+                                    <li><i class="fa-solid fa-graduation-cap"></i> 硕士 / 计算机科学</li>
+                                    <li><i class="fa-solid fa-briefcase"></i> 7年经验</li>
+                                    <li><i class="fa-solid fa-location-dot"></i> 北京</li>
+                                </ul>
+                            </div>
+                        </div>
+                        <div class="card-right">
+                            <div class="key-reasons">
+                                <h4>推荐理由 (点击查看详情)</h4>
+                                <span class="reason-tag"
+                                    onclick="showReasonModal('技术栈高度匹配', '该候选人在GitHub上有多个高星Spring Boot项目，完全符合我们的后端技术栈要求。', '项目经历：\n- 个人开源项目：EasyBoot (3k+ Stars)\n  基于Spring Boot的快速开发脚手架，集成了MyBatis-Plus、Redis等主流组件。\n\n技术栈：Java, Spring Boot, MySQL, Redis, Docker')">技术栈高度匹配</span>
+                                <span class="reason-tag"
+                                    onclick="showReasonModal('领导力体现', '曾在前公司带领10人团队完成核心重构，展现出优秀的领导力。', '工作经历：\n2022.03 - 至今 |某知名互联网公司 | 技术专家\n- 带领10人研发小组，负责支付中台的重构工作；\n- 制定技术规范，从0到1搭建了微服务治理体系；\n- 协调跨部门资源，确保项目按期上线。')">领导力体现</span>
+                                <span class="reason-tag"
+                                    onclick="showReasonModal('教育背景优异', '毕业于985高校，并有相关的持续进修记录。', '教育背景：\n2015 - 2018 | 北京理工大学 | 计算机科学与技术 | 硕士\n2011 - 2015 | 北京理工大学 | 软件工程 | 本科\n\n证书：\n- PMP 项目管理专业人士资格认证')">教育背景优异</span>
+                            </div>
+                            <div class="interview-check">
+                                <label class="checkbox-item">
+                                    <input type="checkbox" class="interview-checkbox">
+                                    <span class="checkmark"></span>
+                                    进入面试
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Candidate Card 2 -->
+                    <div class="candidate-card glass-panel">
+                        <div class="card-left">
+                            <div class="match-score medium">85%</div>
+                            <div class="avatar-placeholder color-2"><i class="fa-solid fa-user"></i></div>
+                            <div class="info">
+                                <h3>李娜</h3>
+                                <p class="summary">具有创新思维的前端工程师，擅长动画交互。</p>
+                                <ul class="details">
+                                    <li><i class="fa-solid fa-graduation-cap"></i> 本科 / 软件工程</li>
+                                    <li><i class="fa-solid fa-briefcase"></i> 4年经验</li>
+                                    <li><i class="fa-solid fa-location-dot"></i> 上海</li>
+                                </ul>
+                            </div>
+                        </div>
+                        <div class="card-right">
+                            <div class="key-reasons">
+                                <h4>推荐理由</h4>
+                                <span class="reason-tag"
+                                    onclick="showReasonModal('视觉审美佳', '作品集展示了极高的UI还原能力和动效设计感。', '项目展示：\n负责公司官网改版（www.example.com），主导了全新的视觉风格定义。\n\n成果：\n- 实现了复杂的WebGL 3D粒子动效；\n- 页面加载速度提升40%；\n- 用户平均停留时长增加1.5倍。')">视觉审美佳</span>
+                                <span class="reason-tag"
+                                    onclick="showReasonModal('React专家', '深度掌握React源码，能解决复杂性能问题。', '专业技能：\n- 精通 JavaScript (ES6+), TypeScript, HTML5, CSS3\n- 深入理解 React 原理 (Fiber, Hooks, Suspense)；\n- 熟悉 Webpack, Vite 等构建工具源码；\n- 曾给 React 官方仓库提交过 PR (Fix memoization bug in v17)。')">React专家</span>
+                            </div>
+                            <div class="interview-check">
+                                <label class="checkbox-item">
+                                    <input type="checkbox" class="interview-checkbox">
+                                    <span class="checkmark"></span>
+                                    进入面试
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="floating-action">
+                    <button class="btn-primary large" onclick="goToInterview()"><i
+                            class="fa-regular fa-paper-plane"></i> 发送面试邀请 (2)</button>
+                </div>
+            </section>
+
+            <!-- VIEW 3: INTERVIEW PROCESS -->
+            <section id="interview-process" class="view-section">
+                <header class="section-header">
+                    <button class="btn-text back-btn" onclick="navigateTo('candidate-screen')"><i
+                            class="fa-solid fa-arrow-left"></i> 返回筛选</button>
+                    <h1>面试流程推进</h1>
+                </header>
+
+                <div class="grid-layout">
+                    <!-- Left: Email & List -->
+                    <div class="panel-left">
+                        <div class="glass-panel">
+                            <h3><i class="fa-regular fa-envelope"></i> 结果回信管理</h3>
+                            <div class="tabs">
+                                <button class="tab-btn active" onclick="switchEmailTab('invite')">面试邀约</button>
+                                <button class="tab-btn" onclick="switchEmailTab('reject')">遗憾拒绝</button>
+                            </div>
+                            <div class="email-editor">
+                                <div class="editor-toolbar">
+                                    <i class="fa-solid fa-bold"></i>
+                                    <i class="fa-solid fa-italic"></i>
+                                    <i class="fa-solid fa-list-ul"></i>
+                                    <span class="variable-tag">{候选人姓名}</span>
+                                    <span class="variable-tag">{岗位名称}</span>
+                                </div>
+                                <textarea id="email-template-area" class="email-textarea">
+尊敬的 {候选人姓名}：
+
+恭喜您！我们非常高兴地通知您，您已通过我们的初步筛选。您的经历与 {岗位名称} 的要求非常契合。
+
+我们诚挚地邀请您参加下一轮技术面试。请查看附件中的面试安排建议，并告知我们您方便的时间。
+
+期待与您的交流！
+人才招聘组
+                                </textarea>
+                            </div>
+
+                            <div class="candidate-email-list">
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>姓名</th>
+                                            <th>邮箱</th>
+                                            <th>状态</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td>张伟</td>
+                                            <td><input type="text" value="zhangwei@example.com" class="table-input">
+                                            </td>
+                                            <td><span class="status-badge success">待发送</span></td>
+                                        </tr>
+                                        <tr>
+                                            <td>李娜</td>
+                                            <td><input type="text" value="lina@example.com" class="table-input"></td>
+                                            <td><span class="status-badge success">待发送</span></td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="panel-footer">
+                                <button class="btn-primary full-width" onclick="sendEmails()"><i
+                                        class="fa-regular fa-paper-plane"></i> 一键发送邀约</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right: AI Questions & Calendar -->
+                    <div class="panel-right">
+                        <div class="glass-panel">
+                            <h3><i class="fa-solid fa-brain"></i> AI 建议面试题</h3>
+                            <div class="accordion">
+                                <div class="accordion-item">
+                                    <div class="accordion-header" onclick="toggleAccordion(this)">
+                                        <span>架构设计 (针对 张伟)</span>
+                                        <i class="fa-solid fa-chevron-down"></i>
+                                    </div>
+                                    <div class="accordion-content">
+                                        <ol>
+                                            <li>请描述您在处理高并发场景时使用过的具体缓存策略。</li>
+                                            <li>您如何保证微服务架构下的数据一致性？</li>
+                                        </ol>
+                                        <button class="btn-text small"><i class="fa-solid fa-plus"></i> 添加</button>
+                                    </div>
+                                </div>
+                                <div class="accordion-item">
+                                    <div class="accordion-header" onclick="toggleAccordion(this)">
+                                        <span>React 性能优化 (针对 李娜)</span>
+                                        <i class="fa-solid fa-chevron-down"></i>
+                                    </div>
+                                    <div class="accordion-content">
+                                        <ol>
+                                            <li>在大型列表中，除了Virtual Dom，您还会使用什么手段优化渲染？</li>
+                                            <li>请解释React Hooks的闭包陷阱及解决方案。</li>
+                                        </ol>
+                                        <button class="btn-text small"><i class="fa-solid fa-plus"></i> 添加</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="glass-panel">
+                            <h3><i class="fa-regular fa-calendar"></i> 日程安排</h3>
+                            <div class="calendar-placeholder">
+                                <!-- Simple CSS Calendar Visualization -->
+                                <div class="cal-header">2026年 1月</div>
+                                <div class="cal-grid">
+                                    <div class="cal-day">SM</div>
+                                    <div class="cal-day">M</div>
+                                    <div class="cal-day">T</div>
+                                    <div class="cal-day">W</div>
+                                    <div class="cal-day">T</div>
+                                    <div class="cal-day">F</div>
+                                    <div class="cal-day">S</div>
+                                    <div class="cal-date faded">28</div>
+                                    <div class="cal-date faded">29</div>
+                                    <div class="cal-date faded">30</div>
+                                    <div class="cal-date">1</div>
+                                    <div class="cal-date">2</div>
+                                    <div class="cal-date">3</div>
+                                    <div class="cal-date">4</div>
+                                    <div class="cal-date">5</div>
+                                    <div class="cal-date">6</div>
+                                    <div class="cal-date">7</div>
+                                    <div class="cal-date">8</div>
+                                    <div class="cal-date">9</div>
+                                    <div class="cal-date">10</div>
+                                    <div class="cal-date active">11</div>
+                                    <div class="cal-date">12</div>
+                                </div>
+                                <div class="time-slots">
+                                    <div class="slot">10:00 - 11:00 (空闲)</div>
+                                    <div class="slot selected">14:00 - 15:00 (已选)</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Modal -->
+        <div id="modal-container" class="modal-overlay">
+            <div class="modal-content glass-panel">
+                <div class="modal-header">
+                    <h2 id="modal-title">标题</h2>
+                    <button class="btn-close" onclick="closeModal()"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <div class="modal-body" id="modal-body">
+                    内容
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/script.js"></script>
+</body>
+
+</html>
