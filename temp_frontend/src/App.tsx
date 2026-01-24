@@ -330,7 +330,11 @@ function LandingPage({ onStart }: { onStart: (role: string) => void }) {
 
 // --- 2. SPEC CONFIGURATOR: CHAT TO JD ---
 function SpecConfigurator({ initialUserInput, onComplete }: { initialUserInput: string, onComplete: (jd: StructuredJD) => void }) {
-  const [formData, setFormData] = useState<StructuredJD>({ ...INITIAL_JD, role: initialUserInput, remarks: initialUserInput });
+  // Fix: remarks should be empty for Salary, not the initial prompt.
+  // We use a separate state 'requestContext' to keep the original prompt for JD generation.
+  const [formData, setFormData] = useState<StructuredJD>({ ...INITIAL_JD, role: initialUserInput, remarks: "" });
+  const [requestContext] = useState(initialUserInput);
+
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [isAiThinking, setIsAiThinking] = useState(false);
@@ -440,7 +444,8 @@ function SpecConfigurator({ initialUserInput, onComplete }: { initialUserInput: 
     ];
 
     try {
-      const jd = await api.generateJd(answers, formData.remarks);
+      // Use requestContext (original prompt) as the raw requirement base
+      const jd = await api.generateJd(answers, requestContext);
       // Map backend JD to frontend structure
       const finalJd: StructuredJD = {
         role: jd.title,
