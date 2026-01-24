@@ -434,7 +434,9 @@ function SpecConfigurator({ initialUserInput, onComplete }: { initialUserInput: 
       { question_id: 'exp', answer: formData.exp_level },
       { question_id: 'soft', answer: formData.culture_fit.join(',') },
       { question_id: 'edu', answer: formData.education },
-      { question_id: 'bonus', answer: formData.plus_points.join(',') }
+      { question_id: 'edu', answer: formData.education },
+      { question_id: 'bonus', answer: formData.plus_points.join(',') },
+      { question_id: 'salary', answer: formData.remarks }
     ];
 
     try {
