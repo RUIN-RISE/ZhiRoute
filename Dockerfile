@@ -13,9 +13,13 @@ COPY temp_frontend/ ./
 RUN npm run build
 
 # Runtime Stage
-FROM registry.cn-hangzhou.aliyuncs.com/modelscope-repo/modelscope:ubuntu22.04-py310-torch2.1.2-tf2.14.0-1.11.0 as runtime
+FROM python:3.10-slim
 
 WORKDIR /app
+
+# Install system dependencies for PyMuPDF (fitz) if needed, though wheels usually exist.
+# kept minimal for speed.
+
 
 # Copy requirements FIRST to leverage cache
 COPY requirements.txt .
