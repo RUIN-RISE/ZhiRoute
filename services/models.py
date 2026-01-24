@@ -50,6 +50,7 @@ class CandidateRank(BaseModel):
     score: int
     summary: str
     top_evidence: List[Evidence]
+    evidence_quotes: List[str] = []  # Direct quotes from resume
 
 class ActionRequest(BaseModel):
     candidate_name: str

@@ -117,6 +117,7 @@ async def analyze_resumes():
     # Convert Pydantic models to dicts for the service
     resume_dicts = [r.dict() for r in GENERATED_RESUMES]
     ranks = llm.rank_candidates(CURRENT_JD, resume_dicts)
+    print(f"DEBUG API: Returning {len(ranks)} candidates to frontend")
     return ranks
 
 @app.post("/api/generate_action", response_model=ActionResponse)

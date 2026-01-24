@@ -1,11 +1,12 @@
 from openai import OpenAI
 import os
+import re
 from typing import List, Dict
 import json
 from .models import ClarificationQuestion, ClarificationResponse, JobDefinition, CandidateRank, Evidence, ActionResponse
 
 # Configuration
-API_KEY = "ms-45e447b6-6011-42e3-bc04-6de20f7fd4f1" # Hardcoded for hackathon speed as requested, usually env var
+API_KEY = "ms-45e447b6-6011-42e3-bc04-6de20f7fd4f1"
 BASE_URL = "https://api-inference.modelscope.cn/v1"
 MODEL_ID = "Qwen/Qwen3-VL-235B-A22B-Instruct"
 
@@ -26,10 +27,9 @@ def _call_llm(messages: List[Dict]) -> str:
                 model=MODEL_ID,
                 messages=messages,
                 stream=False,
-                timeout=60.0 # Increase timeout to 60s
+                timeout=60.0
             )
             content = response.choices[0].message.content
-            # Clean up markdown code blocks if present
             if content.startswith("```"):
                 content = content.replace("```json", "").replace("```", "")
             return content.strip()
@@ -38,7 +38,7 @@ def _call_llm(messages: List[Dict]) -> str:
             if attempt == max_retries - 1:
                 return "{}"
             import time
-            time.sleep(2) # Wait 2s before retry
+            time.sleep(2)
     return "{}"
 
 def clarify_requirements(raw_req: str) -> ClarificationResponse:
@@ -58,37 +58,18 @@ def clarify_requirements(raw_req: str) -> ClarificationResponse:
         {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "user", "content": prompt}
     ])
-    msg_content = conn
     try:
-        # Robust JSON extraction
         idx_dict = conn.find('{')
         if idx_dict != -1:
-             # Try to find the matching closing brace
-             end_idx = conn.rfind('}')
-             if end_idx != -1:
-                 msg_content = conn[idx_dict:end_idx+1]
-        
-        data = json.loads(msg_content)
+            end_idx = conn.rfind('}')
+            if end_idx != -1:
+                conn = conn[idx_dict:end_idx+1]
+        data = json.loads(conn)
         return ClarificationResponse(**data)
     except Exception as e:
-        print(f"Clarification JSON Error: {e}. Content: {conn[:100]}...")
-        # Fallback: try repair
-        try:
-            import re
-            fixed_str = re.sub(r'```json\s*', '', conn)
-            fixed_str = re.sub(r'```', '', fixed_str)
-            start = fixed_str.find('{')
-            end = fixed_str.rfind('}')
-            if start != -1 and end != -1:
-                fixed_str = fixed_str[start:end+1]
-            data = json.loads(fixed_str)
-            return ClarificationResponse(**data)
-        except:
-            pass
-            
-        # Return a default question if all else fails so UI isn't empty
+        print(f"Clarification JSON Error: {e}")
         return ClarificationResponse(questions=[
-            ClarificationQuestion(id="q_fallback", question="请具体描述一下您希望招聘的这位候选人需要具备哪些核心技能？", options=["Java", "Python", "C++", "其他"])
+            ClarificationQuestion(id="q_fallback", question="请描述您需要的核心技能？", options=["Java", "Python", "C++", "其他"])
         ])
 
 def generate_jd(answers: Dict[str, str], raw_req: str = "") -> JobDefinition:
@@ -98,14 +79,8 @@ def generate_jd(answers: Dict[str, str], raw_req: str = "") -> JobDefinition:
     用户的回答：{json.dumps(answers, ensure_ascii=False)}
 
     特别重要：
-    1. 提取“薪资”信息到 `salary` 对象。优先从“初始需求”或“用户回答”中提取！ 
-    2. 如果用户在初始需求里写了 "20k", "15-25k" 等，必须提取！
-       - `range`: 必须提取数字！如 "10k-20k", "25000". 如果用户说 "一万到两万", 转换为 "10-20k". 
-       - `tax_type`: "税前" 或 "税后"
-       - `has_bonus`: detect keywords like "年终奖", "绩效", "14薪".
-    2. 提取“工作地点”到 `work_location`.
-    
-    用户的回答：{json.dumps(answers, ensure_ascii=False)}
+    1. 提取"薪资"信息到 `salary` 对象。
+    2. 提取"工作地点"到 `work_location`。
     
     输出格式示例：
     {{
@@ -133,185 +108,185 @@ def generate_jd(answers: Dict[str, str], raw_req: str = "") -> JobDefinition:
     except:
         return JobDefinition(title="生成失败", key_responsibilities=[], required_skills=[], experience_level="", bonus_skills=[])
 
+
+def _parse_resume_fields(content: str) -> Dict:
+    """Extract structured fields from resume content"""
+    fields = {"exp_years": 0, "education": "", "hard_skills": []}
+    for line in content.split('\n'):
+        line_stripped = line.strip()
+        if line_stripped.startswith("Exp_Years:") or line_stripped.startswith("工作年限:"):
+            try:
+                fields["exp_years"] = int(''.join(filter(str.isdigit, line.split(':')[1][:5])))
+            except: pass
+        elif line_stripped.startswith("Education:") or line_stripped.startswith("学历:"):
+            fields["education"] = line.split(':')[1].strip() if ':' in line else ""
+        elif line_stripped.startswith("Hard_Skills:") or line_stripped.startswith("技能:"):
+            skills_str = line.split(':')[1] if ':' in line else ""
+            fields["hard_skills"] = [s.strip() for s in skills_str.split(',')]
+    return fields
+
+
 def rank_candidates(jd: JobDefinition, resumes: List[Dict]) -> List[CandidateRank]:
-    # Simplify resumes for context window
-    # Limit to top 15 resumes to prevent LLM overload/refusal
-    if len(resumes) > 15:
-        print(f"DEBUG: Truncating {len(resumes)} resumes to 15 for LLM stability.")
-        resumes = resumes[:15]
-        
-    resumes_text = "\n\n".join([f"ID: {r['id']}, Name: {r['name']}, Content: {r['content'][:500]}..." for r in resumes])
+    """Ranking with hard filter + semantic match + evidence quotes"""
+    print(f"DEBUG: Starting ranking for {len(resumes)} candidates")
+    
+    # Parse min experience from JD
+    min_exp = 0
+    exp_level = jd.experience_level.lower()
+    for c in ['1','2','3','5']:
+        if c in exp_level:
+            min_exp = int(c)
+            break
+    
+    # Hard filter
+    filtered = []
+    for r in resumes:
+        fields = _parse_resume_fields(r['content'])
+        if fields["exp_years"] > 0 and fields["exp_years"] < min_exp - 1:
+            print(f"  FILTERED: {r['name']} (Exp {fields['exp_years']} < {min_exp})")
+            continue
+        r['parsed'] = fields
+        filtered.append(r)
+    
+    print(f"DEBUG: {len(filtered)} passed hard filter")
+    if not filtered:
+        return []
+    
+    # Prepare for LLM (limit to 20 for context)
+    resumes_text = "\n\n---\n".join([f"【ID: {r['id']}】\n{r['content'][:800]}" for r in filtered[:20]])
     
     prompt = f"""
-    职位描述：
-    职位：{jd.title}
-    职责：{', '.join(jd.key_responsibilities)}
-    技能：{', '.join(jd.required_skills)}
-    
-    候选人列表：
-    {resumes_text}
-    
-    请根据以下【硬性规则】计算每位候选人的匹配分（Score），并按分数从高到低排序。
-    
-    【评分规则】：
-    1. 技能匹配（60分）：JD中的“必备技能”每匹配一个关键词得 10 分。
-    2. 经验匹配（20分）：工作年限符合得 20 分，否则 0 分。
-    3. 职责匹配（20分）：候选人经历中包含JD职责关键词得 20 分。
-    
-    【岗位关键信息 (再次确认)】：
-    - 职位：{jd.title}
-    - 必需技能：{', '.join(jd.required_skills)}
-    - 职责关键词：{', '.join(jd.key_responsibilities)}
+你是招聘匹配专家。评估候选人与职位的匹配度。
 
-    【重要指令】：
-    1. 你是一个【无情的计算器】，不是HR。只根据上述规则加分。
-    2. 【严禁】检查候选人是否合格！即使0分也要返回！
-    3. 【严禁】返回错误信息或 "error" 对象！
-    4. 【必须】返回得分最高的 前10名 候选人！必须是 JSON 列表！
-    5. ID 使用文件名。
+【职位】{jd.title}
+【技能要求】{', '.join(jd.required_skills)}
+【经验要求】{jd.experience_level}
+
+【候选人列表】
+{resumes_text}
+
+【你的任务】
+1. 从上述候选人中选出匹配度最高的5人
+2. 对每人评分(0-100)，给出理由和简历原文引用
+
+【输出要求 - 非常重要！】
+- 必须输出一个JSON数组，以 [ 开头，以 ] 结尾
+- 数组中必须包含恰好5个对象
+- 每个对象格式如下：
+
+[
+  {{"resume_id": "xxx.txt", "name": "姓名", "score": 90, "summary": "理由", "evidence_quotes": ["引用1"], "top_evidence": [{{"criteria": "技能", "quote": "原文", "reasoning": "理由"}}]}},
+  {{"resume_id": "xxx.txt", "name": "姓名", "score": 85, "summary": "理由", "evidence_quotes": ["引用1"], "top_evidence": [{{"criteria": "技能", "quote": "原文", "reasoning": "理由"}}]}},
+  {{"resume_id": "xxx.txt", "name": "姓名", "score": 80, "summary": "理由", "evidence_quotes": ["引用1"], "top_evidence": [{{"criteria": "技能", "quote": "原文", "reasoning": "理由"}}]}},
+  {{"resume_id": "xxx.txt", "name": "姓名", "score": 75, "summary": "理由", "evidence_quotes": ["引用1"], "top_evidence": [{{"criteria": "技能", "quote": "原文", "reasoning": "理由"}}]}},
+  {{"resume_id": "xxx.txt", "name": "姓名", "score": 70, "summary": "理由", "evidence_quotes": ["引用1"], "top_evidence": [{{"criteria": "技能", "quote": "原文", "reasoning": "理由"}}]}}
+]
+
+严禁只返回1个对象！必须返回5个！以 [ 开头！
+"""
     
-    输出格式示例：
-    [
-        {{
-            "resume_id": "张三_0.txt",
-            ...
-        }}
-    ]
-    """
-    print("DEBUG: Sending to LLM for ranking...", len(resumes_text))
+    print("DEBUG: Sending to LLM for ranking...")
     conn = _call_llm([
         {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "user", "content": prompt}
     ])
-    print("DEBUG: LLM Response:", conn[:200] + "...") # Print first 200 chars
+    print("DEBUG: LLM Response (first 1000 chars):\n", conn[:1000])
+    
     try:
-        # Robust JSON extraction - Respect order of [ vs {
+        # Extract JSON
         idx_list = conn.find('[')
         idx_dict = conn.find('{')
         
-        start_idx = -1
-        is_dict = False
-        
-        # Determine which comes first
-        if idx_list != -1 and idx_dict != -1:
-            if idx_list < idx_dict:
-                start_idx = idx_list
-                end_idx = conn.rfind(']')
-                is_dict = False
-            else:
-                start_idx = idx_dict
-                end_idx = conn.rfind('}')
-                is_dict = True
-        elif idx_list != -1:
+        if idx_list != -1 and (idx_dict == -1 or idx_list < idx_dict):
             start_idx = idx_list
             end_idx = conn.rfind(']')
-            is_dict = False
         elif idx_dict != -1:
             start_idx = idx_dict
             end_idx = conn.rfind('}')
-            is_dict = True
-            
-        if start_idx != -1 and end_idx != -1:
-            json_str = conn[start_idx:end_idx+1]
         else:
-            json_str = conn
+            start_idx, end_idx = 0, len(conn)
             
+        json_str = conn[start_idx:end_idx+1] if start_idx != -1 and end_idx != -1 else conn
+        
         try:
             data = json.loads(json_str)
         except json.JSONDecodeError as e:
-            # Handle "Extra data": concatenated JSON objects like {...}\n{...}
-            import re
-            print(f"JSON Decode Error: {e}. Attempting to repair concatenated objects...")
-            # Replace "} {" or "}\n{" with "}, {"
+            print(f"JSON Decode Error: {e}. Attempting repair...")
             fixed_str = re.sub(r'}\s*{', '}, {', json_str)
-            # Wrap in list if not already
             if not fixed_str.strip().startswith('['):
                 fixed_str = f"[{fixed_str}]"
-            try:
-                data = json.loads(fixed_str)
-            except:
-                 # Fallback: try to split by newline and parse each line
-                 items = []
-                 for line in json_str.splitlines():
-                     try:
-                         if line.strip(): items.append(json.loads(line))
-                     except: pass
-                 if items: data = items
-                 else: raise e
-
-        # Handle case where LLM returns a single object instead of a list
+            data = json.loads(fixed_str)
+        
         if isinstance(data, dict):
             if "error" in data:
-                print(f"LLM Refused to Rank: {data['error']}")
+                print(f"LLM Refused: {data['error']}")
                 return []
             data = [data]
         
-        # Normalize data (Auto-repair LLM shortcuts)
-        cleaned_data = []
+        print(f"DEBUG: Parsed data type={type(data)}, length={len(data) if isinstance(data, list) else 'N/A'}")
+        if isinstance(data, list) and len(data) > 0:
+            print(f"DEBUG: First item keys: {data[0].keys() if isinstance(data[0], dict) else 'not a dict'}")
+        
+        # Clean and normalize
+        cleaned = []
         for item in data:
-            # Safety check: item must be a dict
             if isinstance(item, str):
-                try:
-                    # formatting error where LLM returns ["{...}", "{...}"]
-                    item = json.loads(item)
-                except:
-                    print(f"Skipping invalid item string: {item[:50]}...")
-                    continue
-            
+                try: item = json.loads(item)
+                except: continue
             if not isinstance(item, dict):
-                print(f"Skipping non-dict item: {type(item)}")
                 continue
-
-            # Fix top_evidence if it's a list of strings
-            if "top_evidence" in item and isinstance(item["top_evidence"], list):
-                if item["top_evidence"] and isinstance(item["top_evidence"][0], str):
-                    # Convert ["Vue", "JS"] -> [{"criteria": "Vue", ...}, ...]
-                    item["top_evidence"] = [
-                        {"criteria": text, "quote": "技能/经验匹配", "reasoning": "根据简历内容匹配"} 
-                        for text in item["top_evidence"]
-                    ]
-            # Auto-fill missing fields if LLM acted as a "Calculator" and only returned scores
-            if "rank" not in item:
-                item["rank"] = 0 # Will sort later
-            if "name" not in item:
-                 # Fallback: derive name from resume_id (e.g. "Name_123.txt" -> "Name")
-                 if "resume_id" in item:
-                     item["name"] = item["resume_id"].replace(".txt", "").split("_")[0]
-                 else:
-                     item["name"] = "Unknown Candidate"
-            if "summary" not in item:
-                item["summary"] = "AI根据硬性规则计算得分，无详细总结。"
-            if "top_evidence" not in item:
-                item["top_evidence"] = [{"criteria": "规则计算", "quote": "自动评分", "reasoning": "基于关键词和年限的硬性规则匹配"}]
                 
-            cleaned_data.append(item)
+            # Auto-fill missing fields
+            if "rank" not in item: item["rank"] = 0
+            if "name" not in item:
+                item["name"] = item.get("resume_id", "Unknown").replace(".txt", "").split("_")[0]
+            if "summary" not in item:
+                item["summary"] = "AI匹配评分"
+            if "evidence_quotes" not in item:
+                item["evidence_quotes"] = []
+            if "top_evidence" not in item:
+                item["top_evidence"] = []
+            elif isinstance(item["top_evidence"], list) and item["top_evidence"]:
+                if isinstance(item["top_evidence"][0], str):
+                    item["top_evidence"] = [{"criteria": t, "quote": "", "reasoning": ""} for t in item["top_evidence"]]
             
-        # Re-sort and re-rank
-        cleaned_data.sort(key=lambda x: x.get("score", 0), reverse=True)
-        for i, item in enumerate(cleaned_data):
+            cleaned.append(item)
+        
+        # Sort and rank
+        cleaned.sort(key=lambda x: x.get("score", 0), reverse=True)
+        for i, item in enumerate(cleaned):
             item["rank"] = i + 1
-            
-        ranks = [CandidateRank(**item) for item in cleaned_data]
-        return ranks
+        
+        print(f"DEBUG: Parsed {len(cleaned)} candidates from LLM response")
+        return [CandidateRank(**item) for item in cleaned[:5]]
+    
     except Exception as e:
         print(f"Ranking Error: {e}")
-        # Fallback dump for debugging
-        print(f"Full content was: {conn}")
+        print(f"Full content: {conn[:500]}")
         return []
 
+
 def generate_action(candidate_name: str, action_type: str, job_title: str) -> ActionResponse:
+    action_desc = {
+        "offer": "录用通知书 (Offer Letter)，表达公司对候选人的强烈兴趣，提及职位、薪资期望等",
+        "interview": "面试邀请邮件，包含面试时间安排建议和2个针对性的面试问题",
+        "reject": "婉拒邮件，委婉且专业地表达不予录用"
+    }
+    
     prompt = f"""
-    请为候选人 "{candidate_name}" 生成一份 "{action_type}" (offer, reject, interview)。
-    职位是：{job_title}。
-    
-    如果是面试邀请，可以附带2个针对性的面试题。
-    如果是拒信，要委婉且专业。
-    
-    输出格式：
-    {{
-        "content": "邮件内容..."
-    }}
-    """
+请为候选人 "{candidate_name}" 生成一份【{action_desc.get(action_type, action_type)}】。
+职位：{job_title}
+
+【重要】你要生成的是：{action_type.upper()} 类型邮件
+- 如果是 offer：要表达录用意向，欢迎加入
+- 如果是 interview：要邀请面试，附带问题
+- 如果是 reject：要委婉拒绝
+
+输出格式：
+{{
+    "content": "邮件正文..."
+}}
+"""
     conn = _call_llm([
         {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "user", "content": prompt}

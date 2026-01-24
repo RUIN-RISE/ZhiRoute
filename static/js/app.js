@@ -305,6 +305,12 @@ function renderRanking(ranks) {
             </div>
             <div class="card-body">
                 <p>${candidate.summary}</p>
+                ${candidate.evidence_quotes && candidate.evidence_quotes.length > 0 ? `
+                    <div class="resume-quotes" style="margin: 10px 0; padding: 10px; background: rgba(59, 130, 246, 0.1); border-left: 3px solid var(--primary); border-radius: 4px;">
+                        <div style="font-size: 0.85rem; color: #888; margin-bottom: 5px;">📄 简历原文引用:</div>
+                        ${candidate.evidence_quotes.map(q => `<blockquote style="margin: 5px 0; font-style: italic; color: #ccc;">"${q}"</blockquote>`).join('')}
+                    </div>
+                ` : ''}
                 <div class="evidence-list">
                     ${candidate.top_evidence.map(e => `
                         <div class="evidence-item">
