@@ -50,8 +50,8 @@ MODEL_CONFIGS = [
     },
 ]
 
-# Track current model index (starts with first = GLM SF)
-current_model_idx = 3
+# Track current model index (starts with first = GLM)
+current_model_idx = 0
 
 SYSTEM_PROMPT = """你是一个专业的招聘专家助手 Copilot。你的任务是帮助没有专业HR的小公司进行招聘流程。
 输出必须严格遵守 JSON 格式，不要包含Markdown代码块标记（如 ```json ... ```），直接输出纯JSON字符串。
@@ -262,7 +262,7 @@ def chat_clarify(history: List[Dict], user_message: str) -> ChatResponse:
     # Add system prompt (Format enforcement)
     messages.append({"role": "system", "content": CHAT_SYSTEM_FORMAT + "\n\n请只输出JSON，不要输出任何其他解释文字。"})
 
-    max_retries = 3
+    max_retries = 5
     for attempt in range(max_retries):
         result = _call_llm(messages, timeout=15.0)
         print(f"DEBUG: Chat Result Raw (Attempt {attempt+1}/{max_retries}):\n{result}\n----------------")

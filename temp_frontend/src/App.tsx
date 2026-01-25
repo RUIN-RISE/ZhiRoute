@@ -74,6 +74,9 @@ export default function JobOSCmdDeck() {
   const [dashboardCandidates, setDashboardCandidates] = useState<CandidateRank[]>([]);
   const [dashboardProcessedCount, setDashboardProcessedCount] = useState<number>(0);
 
+  // Lifted Interview Cache
+  const [interviewCache, setInterviewCache] = useState<Record<string, any>>({});
+
   // Global Motion: Mouse Tracking
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -137,7 +140,7 @@ export default function JobOSCmdDeck() {
               <Command className="w-5 h-5 text-white" />
             </div>
             <div className="tracking-tight leading-tight">
-              <div className="font-bold text-white text-lg tracking-tight">JOB OS</div>
+              <div className="font-bold text-white text-lg tracking-tight">职通车</div>
             </div>
           </div>
         </div>
@@ -196,7 +199,7 @@ export default function JobOSCmdDeck() {
           )}
           {step === 'INTERVIEW_PREP' && (
             <motion.div key="interview" initial={{ opacity: 0, x: 50 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 50 }} className="flex-1 overflow-hidden h-full">
-              <InterviewPanel candidates={shortlistedCandidates} />
+              <InterviewPanel candidates={shortlistedCandidates} cache={interviewCache} setCache={setInterviewCache} />
             </motion.div>
           )}
         </AnimatePresence>
@@ -307,10 +310,10 @@ function LandingPage({ onStart }: { onStart: (role: string) => void }) {
           <div className="pl-6 pr-6 text-indigo-400">
             <Terminal className="w-10 h-10" />
           </div>
-          <input autoFocus className="flex-1 bg-transparent border-none text-white text-3xl h-20 outline-none placeholder:text-zinc-700 font-mono font-bold tracking-tight" value={input} onChange={e => setInput(e.target.value)} placeholder="" />
+          <input autoFocus className="flex-1 bg-transparent border-none text-white text-3xl h-20 outline-none placeholder:text-zinc-700 font-mono font-bold tracking-tight caret-white" value={input} onChange={e => setInput(e.target.value)} placeholder="" />
           {!input && (
-            <div className="absolute left-16 top-1/2 -translate-y-1/2 text-zinc-600 text-lg pointer-events-none flex items-center font-mono opacity-50">
-              <span className="animate-pulse mr-2">_</span>
+            <div className="absolute left-28 top-1/2 -translate-y-1/2 text-zinc-600 text-lg pointer-events-none flex items-center font-mono opacity-50">
+
               <AnimatePresence mode="wait">
                 <motion.span key={suggestionIdx} initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} transition={{ duration: 0.3 }}>
                   {START_SUGGESTIONS[suggestionIdx]}
@@ -745,11 +748,14 @@ function ExecutionDashboard({
 }
 
 // --- 4. INTERVIEW PANEL (ACTION GEN) ---
-function InterviewPanel({ candidates }: { candidates: CandidateRank[] }) {
+function InterviewPanel({ candidates, cache, setCache }: { candidates: CandidateRank[], cache: Record<string, any>, setCache: React.Dispatch<React.SetStateAction<Record<string, any>>> }) {
   const [selectedCandidate, setSelectedCandidate] = useState(candidates[0]);
   const [actionType, setActionType] = useState<'interview' | 'offer' | 'reject'>('interview');
-  const [generatedContent, setGeneratedContent] = useState<any>(null);
+  // const [contentCache, setContentCache] = useState<Record<string, any>>({}); // Lifted
   const [isLoading, setIsLoading] = useState(false);
+
+  const cacheKey = selectedCandidate ? `${selectedCandidate.resume_id}-${actionType}` : '';
+  const generatedContent = cacheKey ? cache[cacheKey] : null;
 
   useEffect(() => {
     if (candidates.length > 0) setSelectedCandidate(candidates[0]);
@@ -761,7 +767,7 @@ function InterviewPanel({ candidates }: { candidates: CandidateRank[] }) {
     try {
       // Need job title from context, mostly passed in or we use placeholder
       const res = await api.generateAction(selectedCandidate.name, actionType, "目标岗位");
-      setGeneratedContent(res);
+      setCache(prev => ({ ...prev, [cacheKey]: res }));
     } catch (e) { console.error(e); }
     finally { setIsLoading(false); }
   };
@@ -772,7 +778,7 @@ function InterviewPanel({ candidates }: { candidates: CandidateRank[] }) {
       <div className="w-64 shrink-0 border-r border-white/10 pr-6 space-y-4 h-full overflow-y-auto">
         <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-4">待处理候选人</h3>
         {candidates.map(c => (
-          <div key={c.resume_id} onClick={() => { setSelectedCandidate(c); setGeneratedContent(null); }} className={cn("p-4 rounded-xl cursor-pointer border transition-all", selectedCandidate?.resume_id === c.resume_id ? "bg-indigo-600 border-indigo-500/50 shadow-lg text-white" : "bg-white/5 border-white/5 hover:bg-white/10 text-zinc-400")}>
+          <div key={c.resume_id} onClick={() => setSelectedCandidate(c)} className={cn("p-4 rounded-xl cursor-pointer border transition-all", selectedCandidate?.resume_id === c.resume_id ? "bg-indigo-600 border-indigo-500/50 shadow-lg text-white" : "bg-white/5 border-white/5 hover:bg-white/10 text-zinc-400")}>
             <div className="font-bold">{c.name}</div>
             <div className="text-xs opacity-70 mt-1">Score: {c.score}</div>
           </div>
@@ -783,7 +789,7 @@ function InterviewPanel({ candidates }: { candidates: CandidateRank[] }) {
       <div className="flex-1 flex flex-col">
         <div className="flex gap-4 mb-8">
           {[{ id: 'interview', label: '面试邀请' }, { id: 'offer', label: 'Offer录用' }, { id: 'reject', label: '遗憾婉拒' }].map(t => (
-            <button key={t.id} onClick={() => { setActionType(t.id as any); setGeneratedContent(null); }} className={cn("px-6 py-3 rounded-xl font-bold text-sm transition-all border", actionType === t.id ? "bg-white text-black border-white" : "bg-transparent text-zinc-500 border-white/10 hover:border-white/30")}>
+            <button key={t.id} onClick={() => setActionType(t.id as any)} className={cn("px-6 py-3 rounded-xl font-bold text-sm transition-all border", actionType === t.id ? "bg-white text-black border-white" : "bg-transparent text-zinc-500 border-white/10 hover:border-white/30")}>
               {t.label}
             </button>
           ))}
