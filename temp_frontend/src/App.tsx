@@ -318,21 +318,17 @@ export default function JobOSCmdDeck() {
 
               <div className="h-4 w-[1px] bg-white/10"></div>
 
-              <div className="flex items-center gap-3 group relative cursor-pointer">
+              <div className="flex items-center gap-3">
                 <div className="text-right hidden sm:block">
                   <div className="text-xs font-bold text-white">{accountName}</div>
                   <div className="text-[10px] text-zinc-500">Cloud Synced</div>
                 </div>
-                <div className="w-8 h-8 rounded-full bg-indigo-500/20 border border-indigo-500/50 flex items-center justify-center text-indigo-400 group-hover:bg-indigo-500 group-hover:text-white transition-all">
+                <div className="w-8 h-8 rounded-full bg-indigo-500/20 border border-indigo-500/50 flex items-center justify-center text-indigo-400">
                   <Unlock className="w-4 h-4" />
                 </div>
-
-                {/* Logout Dropdown (Hover) */}
-                <div className="absolute right-0 top-full mt-2 w-32 bg-black/90 border border-white/10 rounded-xl shadow-2xl overflow-hidden opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity z-50">
-                  <div onPointerDown={handleLogout} className="w-full text-left px-4 py-3 text-sm flex items-center gap-2 text-red-400 hover:bg-white/5 cursor-pointer">
-                    <LogOut className="w-4 h-4" /> 注销登录
-                  </div>
-                </div>
+                <button onClick={handleLogout} className="ml-1 w-8 h-8 rounded-lg bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 flex items-center justify-center text-red-500 transition-colors" title="注销登录">
+                  <LogOut className="w-4 h-4" />
+                </button>
               </div>
             </div>
           )}
@@ -567,12 +563,12 @@ function LandingPage({ onStart, isLogged, onSkipToDashboard }: { onStart: (role:
               开始筛选
               <ArrowRight className="w-5 h-5" />
             </MagneticButton>
+            {isLogged && (
+              <button type="button" onClick={onSkipToDashboard} className="px-8 h-20 rounded-2xl border border-indigo-500/30 text-indigo-300 bg-black/40 hover:bg-indigo-500/10 transition-colors text-lg font-bold flex items-center justify-center whitespace-nowrap backdrop-blur-md hover:shadow-[0_0_20px_rgba(99,102,241,0.2)]">
+                直接进入简历库
+              </button>
+            )}
           </div>
-          {isLogged && (
-            <button type="button" onClick={onSkipToDashboard} className="absolute right-0 translate-x-[calc(100%+1.5rem)] px-8 h-20 rounded-2xl border border-indigo-500/30 text-indigo-300 bg-black/40 hover:bg-indigo-500/10 transition-colors text-lg font-bold flex items-center justify-center whitespace-nowrap backdrop-blur-md hover:shadow-[0_0_20px_rgba(99,102,241,0.2)]">
-              直接进入简历库
-            </button>
-          )}
         </form>
       </div>
     </div>

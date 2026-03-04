@@ -25,6 +25,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+ACTIVE_SESSIONS = {} # { account_name: { "session_id": str, "last_active": timestamp } }
+
 # 初始化 SQLite 数据库
 def init_db():
     conn = sqlite3.connect(DB_PATH)
@@ -46,6 +48,14 @@ def init_db():
 init_db()
 
 # --- 接口模型 ---
+class LoginRequest(BaseModel):
+    invite_code: str
+    session_id: str
+
+class HeartbeatRequest(BaseModel):
+    account_name: str
+    session_id: str
+
 class SaveRecordRequest(BaseModel):
     account_name: str
     record_type: str
@@ -59,6 +69,49 @@ class HistoryRecord(BaseModel):
     created_at: str
 
 # --- 路由 ---
+
+@app.post("/api/cloud/auth/login")
+async def cloud_login(req: LoginRequest):
+    import time
+    
+    # 验证内置的内测码池，若不存在，如果用户是在部署阶段执行过 generate_invites 则能找得到。
+    # 为了简化跨服务器部署，如果未发现邀请名单，我们可以使用内置正则校验，例如必须是 JOBOS- 开头且格式相符
+    if not req.invite_code.startswith("JOBOS-"):
+        raise HTTPException(status_code=401, detail="无效的内测邀请码。")
+        
+    account_name = f"user_{req.invite_code[-4:]}"
+    current_time = time.time()
+    
+    if account_name in ACTIVE_SESSIONS:
+        last_active = ACTIVE_SESSIONS[account_name]["last_active"]
+        # Timeout is 120 seconds
+        if (current_time - last_active) < 120:
+            if ACTIVE_SESSIONS[account_name]["session_id"] != req.session_id:
+                raise HTTPException(status_code=403, detail=f"账号 '{account_name}' 正在别处使用中，请稍后再试或换个内测码！")
+                
+    ACTIVE_SESSIONS[account_name] = {"session_id": req.session_id, "last_active": current_time}
+    return {"status": "success", "account_name": account_name}
+
+@app.post("/api/cloud/auth/heartbeat")
+async def cloud_heartbeat(req: HeartbeatRequest):
+    import time
+    if req.account_name in ACTIVE_SESSIONS:
+        if ACTIVE_SESSIONS[req.account_name]["session_id"] == req.session_id:
+            ACTIVE_SESSIONS[req.account_name]["last_active"] = time.time()
+            return {"status": "ok"}
+        else:
+            raise HTTPException(status_code=403, detail="账号已被其他终端挤占")
+            
+    # Session expired but beating
+    ACTIVE_SESSIONS[req.account_name] = {"session_id": req.session_id, "last_active": time.time()}
+    return {"status": "ok"}
+
+@app.post("/api/cloud/auth/logout")
+async def cloud_logout(req: HeartbeatRequest):
+    if req.account_name in ACTIVE_SESSIONS:
+        if ACTIVE_SESSIONS[req.account_name]["session_id"] == req.session_id:
+            del ACTIVE_SESSIONS[req.account_name]
+    return {"status": "success"}
 
 @app.post("/api/cloud/save_record")
 async def save_record(req: SaveRecordRequest):

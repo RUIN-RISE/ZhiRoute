@@ -85,40 +85,44 @@ except Exception as e:
     print(f"Failed to load invites: {e}")
     INVITES_MAP = {"ADMIN-TEST-CODE": "test_admin"}
 
-# ACTIVE_SESSIONS: account_name -> {"session_id": str, "last_active": float}
-ACTIVE_SESSIONS = {}
-HEARTBEAT_TIMEOUT = 180  # 3 minutes
+# ACTIVE_SESSIONS is now managed globally by 163 cloud server
+# We no longer need local ACTIVE_SESSIONS or HEARTBEAT_TIMEOUT
 
 class LoginRequest(BaseModel):
     invite_code: str
     
 @app.post("/api/login")
 async def login(req: LoginRequest, x_session_id: str = Header(None)):
+    import os
+    import httpx
+    from dotenv import load_dotenv
     if not x_session_id:
         raise HTTPException(status_code=400, detail="Missing X-Session-ID")
         
     code = req.invite_code.strip()
-    if code not in INVITES_MAP:
-        raise HTTPException(status_code=401, detail="无效的内测码")
+    
+    # Delegate to global cloud server
+    load_dotenv(override=True)
+    cloud_api = os.getenv("CLOUD_STORAGE_API", "http://163.7.10.125:80")
+    
+    url = f"{cloud_api}/api/cloud/auth/login"
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.post(url, json={"invite_code": code, "session_id": x_session_id})
+            resp.raise_for_status()
+            account_name = resp.json().get("account_name")
+    except httpx.HTTPStatusError as e:
+        if e.response.status_code in [401, 403]:
+            detail = e.response.json().get("detail", "Auth failed")
+            raise HTTPException(status_code=e.response.status_code, detail=detail)
+        raise HTTPException(status_code=500, detail="Cloud auth failed")
+    except Exception as e:
+        # For resilience, if cloud server is down, fallback to local file logic.
+        if code not in INVITES_MAP:
+            raise HTTPException(status_code=401, detail="云服务未响应且无效的内测码")
+        account_name = INVITES_MAP[code]
+        print(f"Fallback to local auth: {e}")
         
-    account_name = INVITES_MAP[code]
-    
-    # Check if this account is currently occupied by another active session
-    current_time = time.time()
-    if account_name in ACTIVE_SESSIONS:
-        active_info = ACTIVE_SESSIONS[account_name]
-        # Ignore if the same session id is claiming it again
-        if active_info["session_id"] != x_session_id:
-            # Check if the existing session is still alive
-            if current_time - active_info["last_active"] < HEARTBEAT_TIMEOUT:
-                raise HTTPException(
-                    status_code=403, 
-                    detail=f"抱歉，该内测账号 ({account_name}) 正在被其他人使用"
-                )
-                
-    # Grant access: register session activity
-    ACTIVE_SESSIONS[account_name] = {"session_id": x_session_id, "last_active": current_time}
-    
     # Ensure UserState exists
     if x_session_id not in SESSIONS:
         SESSIONS[x_session_id] = UserState()
@@ -129,24 +133,41 @@ async def login(req: LoginRequest, x_session_id: str = Header(None)):
 async def heartbeat(x_session_id: str = Header(None), x_account_name: str = Header(None)):
     if not x_account_name or not x_session_id:
         return {"status": "ignored"}
+        
+    import os
+    import httpx
+    from dotenv import load_dotenv
+    load_dotenv(override=True)
+    cloud_api = os.getenv("CLOUD_STORAGE_API", "http://163.7.10.125:80")
     
-    # Only update if this session actually owns the account
-    if x_account_name in ACTIVE_SESSIONS:
-        if ACTIVE_SESSIONS[x_account_name]["session_id"] == x_session_id:
-            ACTIVE_SESSIONS[x_account_name]["last_active"] = time.time()
-            return {"status": "ok"}
-        else:
+    url = f"{cloud_api}/api/cloud/auth/heartbeat"
+    try:
+        async with httpx.AsyncClient(timeout=3.0) as client:
+            resp = await client.post(url, json={"account_name": x_account_name, "session_id": x_session_id})
+            resp.raise_for_status()
+    except httpx.HTTPStatusError as e:
+        if e.response.status_code == 403:
             raise HTTPException(status_code=403, detail="账号已被其他终端挤占")
-            
-    # Session expired but still beating? Re-register if not occupied
-    ACTIVE_SESSIONS[x_account_name] = {"session_id": x_session_id, "last_active": time.time()}
+    except Exception:
+        pass
+        
     return {"status": "ok"}
 
 @app.post("/api/logout")
 async def logout(x_session_id: str = Header(None), x_account_name: str = Header(None)):
-    if x_account_name and x_account_name in ACTIVE_SESSIONS:
-        if ACTIVE_SESSIONS[x_account_name]["session_id"] == x_session_id:
-            del ACTIVE_SESSIONS[x_account_name]
+    import os
+    import httpx
+    from dotenv import load_dotenv
+    load_dotenv(override=True)
+    cloud_api = os.getenv("CLOUD_STORAGE_API", "http://163.7.10.125:80")
+    
+    if x_account_name and x_session_id:
+        url = f"{cloud_api}/api/cloud/auth/logout"
+        try:
+            async with httpx.AsyncClient(timeout=3.0) as client:
+                await client.post(url, json={"account_name": x_account_name, "session_id": x_session_id})
+        except Exception as e:
+            print(f"Cloud logout failed: {e}")
             
     if x_session_id in SESSIONS:
         del SESSIONS[x_session_id]
