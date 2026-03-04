@@ -30,6 +30,8 @@ import {
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { motion, AnimatePresence } from 'framer-motion';
+import logoW from './assets/logo_w.png';
+// --- API CLIENT ---
 import api from './api';
 import type { ChatMessage, CandidateRank } from './api';
 
@@ -282,7 +284,7 @@ export default function JobOSCmdDeck() {
             </button>
           )}
           <div className="flex items-center gap-3 select-none pointer-events-none">
-            <img src="./logo_w.png" alt="JobOS Logo" className="h-8 object-contain" />
+            <img src={logoW} alt="JobOS Logo" className="h-8 object-contain" />
           </div>
         </div>
         <div className="flex items-center gap-6">
