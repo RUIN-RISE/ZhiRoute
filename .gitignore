@@ -10,5 +10,10 @@ venv/
 .vscode/
 
 问题记录.txt
+*.zip
+*.rar
+*.pdf
 
 technical_implementation.md
+demo_script.md
+invites.json

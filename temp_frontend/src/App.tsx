@@ -9,7 +9,6 @@ import {
   Code2,
   Loader2,
   Activity,
-  Command,
   Cpu,
   Zap,
   CheckCircle2,
@@ -21,7 +20,12 @@ import {
   ChevronLeft,
   FileText,
   User,
-  Terminal as BotIcon
+  Terminal as BotIcon,
+  LogOut,
+  History,
+  Lock,
+  Unlock,
+  Archive
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -77,6 +81,135 @@ export default function JobOSCmdDeck() {
   // Lifted Interview Cache
   const [interviewCache, setInterviewCache] = useState<Record<string, any>>({});
 
+  // Account & History State
+  const [inviteCode, setInviteCode] = useState<string>('');
+  const [accountName, setAccountName] = useState<string>(localStorage.getItem('jobos_account_name') || '');
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [accountHistory, setAccountHistory] = useState<any[]>([]);
+  const [isLogged, setIsLogged] = useState(!!localStorage.getItem('jobos_account_name'));
+
+  useEffect(() => {
+    let interval: any;
+    if (isLogged) {
+      loadHistory();
+      api.heartbeat().catch(() => handleLogout()); // initial beat
+      interval = setInterval(() => {
+        api.heartbeat().catch(e => {
+          console.error(e);
+          alert("您的账号在别处登录或遇到错误被迫下线。");
+          handleLogout();
+        });
+      }, 60000); // beating every minute
+    }
+    return () => { if (interval) clearInterval(interval); };
+  }, [isLogged]);
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inviteCode.trim()) return;
+    try {
+      const data = await api.login(inviteCode.trim());
+      setAccountName(data.account_name);
+      setIsLogged(true);
+    } catch (err: any) {
+      alert(err.message || '登录异常');
+    }
+  };
+
+  const handleLogout = async () => {
+    try { await api.logout(); } catch (e) { }
+    setIsLogged(false);
+    setAccountName('');
+    setInviteCode('');
+    setAccountHistory([]);
+    setStep('IDLE');
+    setDashboardPhase('INGEST');
+    setDashboardFiles([]);
+    setDashboardCandidates([]);
+    setJdData(INITIAL_JD);
+    setInterviewCache({});
+    api.setSessionId('xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+      const r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    })); // Force new session uuid assignment
+  };
+
+  const loadHistory = async () => {
+    try {
+      const hist = await api.getAccountHistory();
+      const parsedHist = hist.map((r: any) => ({
+        ...r,
+        content: typeof r.content === 'string' ? JSON.parse(r.content) : r.content
+      }));
+      setAccountHistory(parsedHist);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  // 自动触发工作区切片存盘 (Debounced)
+  useEffect(() => {
+    if (!isLogged || dashboardCandidates.length === 0) return;
+
+    const timer = setTimeout(() => {
+      api.saveWorkspace(jdData, dashboardCandidates, interviewCache).catch(console.error);
+    }, 2000);
+
+    return () => clearTimeout(timer);
+  }, [dashboardCandidates, interviewCache, isLogged, jdData]);
+
+  const handleLoadHistoryRecord = async (record: any) => {
+    let rawJd = null;
+    let isWorkspace = false;
+
+    if (record.record_type === 'jd') {
+      rawJd = typeof record.content === 'string' ? JSON.parse(record.content) : record.content;
+    } else if (record.record_type === 'workspace') {
+      isWorkspace = true;
+      const wObj = typeof record.content === 'string' ? JSON.parse(record.content) : record.content;
+      rawJd = wObj.jd_data || {};
+      setDashboardCandidates(wObj.candidates || []);
+      setInterviewCache(wObj.interview_cache || {});
+    } else {
+      return;
+    }
+
+    const finalJd: StructuredJD = {
+      role: rawJd.title || rawJd.role || "",
+      stack: rawJd.required_skills || rawJd.stack || [],
+      exp_level: rawJd.experience_level || rawJd.exp_level || "未指定",
+      culture_fit: rawJd.culture_fit || [],
+      education: rawJd.education || "未指定",
+      plus_points: rawJd.bonus_skills || rawJd.plus_points || [],
+      remarks: rawJd.salary ? (rawJd.salary.range ? `${rawJd.salary.range} (${rawJd.salary.tax_type || '税前'})` : (rawJd.salary.description || "面议")) : (rawJd.remarks || "")
+    };
+
+    setJdData(finalJd);
+
+    // 强制同步后台 Session
+    try {
+      await api.setCurrentJd({
+        title: finalJd.role || "未命名职位",
+        key_responsibilities: [],
+        required_skills: finalJd.stack || [],
+        experience_level: finalJd.exp_level || "未指定",
+        salary: { range: "", tax_type: "税前", has_bonus: false, description: finalJd.remarks },
+        work_location: "不限",
+        bonus_skills: finalJd.plus_points || []
+      } as any);
+    } catch (e) { console.error("Sync JD error", e); }
+
+    // 智能路由跳转
+    if (isWorkspace) {
+      setStep('DEPLOYED');
+      setDashboardPhase('RESULTS');
+    } else {
+      setStep('JD_REVIEW');
+    }
+
+    setIsSidebarOpen(false);
+  };
+
   // Global Motion: Mouse Tracking
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -98,8 +231,21 @@ export default function JobOSCmdDeck() {
     setStep('JD_REVIEW');
   };
 
-  const handleJdConfirmed = (confirmedJd: StructuredJD) => {
+  const handleJdConfirmed = async (confirmedJd: StructuredJD) => {
     setJdData(confirmedJd);
+
+    try {
+      await api.setCurrentJd({
+        title: confirmedJd.role || "未命名职位",
+        key_responsibilities: [],
+        required_skills: confirmedJd.stack || [],
+        experience_level: confirmedJd.exp_level || "未指定",
+        salary: { range: "", tax_type: "税前", has_bonus: false, description: confirmedJd.remarks },
+        work_location: "不限",
+        bonus_skills: confirmedJd.plus_points || []
+      });
+    } catch (e) { console.error("Sync JD error", e); }
+
     setStep('DEPLOYED');
   };
 
@@ -135,13 +281,8 @@ export default function JobOSCmdDeck() {
               <ChevronLeft className="w-4 h-4 text-zinc-400 group-hover:text-white" />
             </button>
           )}
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
-              <Command className="w-5 h-5 text-white" />
-            </div>
-            <div className="tracking-tight leading-tight">
-              <div className="font-bold text-white text-lg tracking-tight">职通车</div>
-            </div>
+          <div className="flex items-center gap-3 select-none pointer-events-none">
+            <img src="/logo_w.png" alt="JobOS Logo" className="h-8 object-contain" />
           </div>
         </div>
         <div className="flex items-center gap-6">
@@ -150,23 +291,123 @@ export default function JobOSCmdDeck() {
             {step === 'IDLE' ? 'System Ready' : 'Pipeline Active'}
           </div>
           <div className="h-4 w-[1px] bg-white/10"></div>
-          <div className="flex items-center gap-3">
-            <div className="text-right hidden sm:block">
-              <div className="text-xs font-bold text-white">HR Admin</div>
-              <div className="text-[10px] text-zinc-500">Enterprise Plan</div>
+
+          {/* Account Area */}
+          {!isLogged ? (
+            <form onSubmit={handleLogin} className="flex items-center gap-2">
+              <input
+                type="text"
+                value={inviteCode}
+                onChange={e => setInviteCode(e.target.value.toUpperCase())}
+                placeholder="输入内测码..."
+                className="bg-white/10 border border-white/20 rounded-lg px-3 py-1.5 text-sm font-mono text-white focus:outline-none focus:border-indigo-500 w-40 placeholder:text-zinc-600 transition-colors uppercase"
+              />
+              <button type="submit" className="bg-indigo-600 text-white p-1.5 rounded-lg hover:bg-indigo-500 transition-colors">
+                <Lock className="w-4 h-4" />
+              </button>
+            </form>
+          ) : (
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => setIsSidebarOpen(true)}
+                className="flex items-center gap-2 text-xs font-bold text-zinc-400 hover:text-white transition-colors bg-white/5 px-3 py-1.5 rounded-lg border border-white/5 hover:border-white/20"
+              >
+                <History className="w-4 h-4" />
+                历史记录 ({accountHistory.length})
+              </button>
+
+              <div className="h-4 w-[1px] bg-white/10"></div>
+
+              <div className="flex items-center gap-3 group relative cursor-pointer">
+                <div className="text-right hidden sm:block">
+                  <div className="text-xs font-bold text-white">{accountName}</div>
+                  <div className="text-[10px] text-zinc-500">Cloud Synced</div>
+                </div>
+                <div className="w-8 h-8 rounded-full bg-indigo-500/20 border border-indigo-500/50 flex items-center justify-center text-indigo-400 group-hover:bg-indigo-500 group-hover:text-white transition-all">
+                  <Unlock className="w-4 h-4" />
+                </div>
+
+                {/* Logout Dropdown (Hover) */}
+                <div className="absolute right-0 top-full mt-2 w-32 bg-black/90 border border-white/10 rounded-xl shadow-2xl overflow-hidden opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity z-50">
+                  <div onPointerDown={handleLogout} className="w-full text-left px-4 py-3 text-sm flex items-center gap-2 text-red-400 hover:bg-white/5 cursor-pointer">
+                    <LogOut className="w-4 h-4" /> 注销登录
+                  </div>
+                </div>
+              </div>
             </div>
-            <div className="w-8 h-8 rounded-full bg-zinc-800 border border-white/10 flex items-center justify-center">
-              <User className="w-4 h-4 text-zinc-400" />
-            </div>
-          </div>
+          )}
         </div>
       </header>
 
       <main className="relative z-10 pt-20 min-h-screen flex flex-col">
+        {/* --- History Sidebar Drawer --- */}
+        <AnimatePresence>
+          {isSidebarOpen && (
+            <>
+              {/* Backdrop */}
+              <motion.div
+                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                onClick={() => setIsSidebarOpen(false)}
+                className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40"
+              />
+
+              {/* Drawer */}
+              <motion.div
+                initial={{ x: '100%', opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: '100%', opacity: 0 }}
+                transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+                className="fixed top-20 right-0 h-[calc(100vh-5rem)] w-96 bg-[#0A0A0B] border-l border-white/10 shadow-2xl z-50 flex flex-col overflow-hidden"
+              >
+                <div className="px-6 py-5 border-b border-white/5 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-lg bg-indigo-500/10">
+                      <Archive className="w-5 h-5 text-indigo-400" />
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-white text-lg leading-none">账号时间线</h3>
+                      <p className="text-xs text-zinc-500 mt-1">云端同步的最近 10 条记录</p>
+                    </div>
+                  </div>
+                  <button onClick={() => setIsSidebarOpen(false)} className="mx-2 p-2 hover:bg-white/5 rounded-full text-zinc-400 transition-colors">
+                    <XCircle className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                  {accountHistory.length === 0 ? (
+                    <div className="h-full flex flex-col items-center justify-center text-zinc-600 gap-4">
+                      <Archive className="w-12 h-12 opacity-20" />
+                      <p className="text-sm">暂无云端历史记录</p>
+                    </div>
+                  ) : (
+                    accountHistory.map((rec, i) => (
+                      <div
+                        key={i}
+                        onClick={() => handleLoadHistoryRecord(rec)}
+                        className="p-4 rounded-xl bg-white/[0.02] border border-white/5 hover:bg-white/[0.05] hover:border-indigo-500/30 transition-all cursor-pointer group relative overflow-hidden"
+                      >
+                        <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-indigo-500 to-purple-500 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                        <div className="flex justify-between items-start mb-2">
+                          <span className={cn("text-xs font-bold px-2 py-0.5 rounded uppercase tracking-wider", rec?.record_type === 'jd' ? "bg-indigo-500/20 text-indigo-300" : "bg-emerald-500/20 text-emerald-300")}>
+                            {rec?.record_type || 'Unknown'}
+                          </span>
+                          <span className="text-[10px] text-zinc-500">{rec?.timestamp ? new Date(rec.timestamp * 1000).toLocaleString() : ''}</span>
+                        </div>
+                        <div className="text-sm text-zinc-300 font-medium line-clamp-2">
+                          {rec?.record_type === 'jd' ? (rec?.content?.role || rec?.content?.title || "未命名职位") : `Action对: ${rec?.content?.content?.substring(0, 20) || 'Action Result'}...`}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </motion.div>
+            </>
+          )}
+        </AnimatePresence>
+
         <AnimatePresence mode='wait'>
           {step === 'IDLE' && (
             <motion.div key="landing" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, filter: 'blur(20px)', scale: 1.05 }} transition={{ duration: 0.5 }} className="flex-1 flex flex-col">
-              <LandingPage onStart={handleStart} />
+              <LandingPage onStart={handleStart} isLogged={isLogged} onSkipToDashboard={() => setStep('DEPLOYED')} />
             </motion.div>
           )}
           {step === 'BRIEFING' && (
@@ -245,23 +486,23 @@ function JdReviewPanel({ jd, onConfirm }: { jd: StructuredJD, onConfirm: (jd: St
           </div>
           <div className="col-span-2 space-y-2">
             <Label icon={<Code2 className="w-4 h-4" />} text="核心技能 (逗号分隔)" />
-            <input className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-indigo-500/50 outline-none transition-colors" value={editedJd.stack.join(', ')} onChange={e => handleChange('stack', e.target.value.split(/[,，]/).map(s => s.trim()).filter(Boolean))} />
+            <input className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-indigo-500/50 outline-none transition-colors" value={(editedJd.stack || []).join(', ')} onChange={e => handleChange('stack', e.target.value.split(/[,，]/).map(s => s.trim()).filter(Boolean))} />
           </div>
           <div className="col-span-2 space-y-2">
             <Label icon={<Target className="w-4 h-4" />} text="加分项 (逗号分隔)" />
-            <input className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-indigo-500/50 outline-none transition-colors" value={editedJd.plus_points.join(', ')} onChange={e => handleChange('plus_points', e.target.value.split(/[,，]/).map(s => s.trim()).filter(Boolean))} />
+            <input className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-indigo-500/50 outline-none transition-colors" value={(editedJd.plus_points || []).join(', ')} onChange={e => handleChange('plus_points', e.target.value.split(/[,，]/).map(s => s.trim()).filter(Boolean))} />
           </div>
           <div className="space-y-2">
             <Label icon={<ShieldCheck className="w-4 h-4" />} text="学历要求" />
-            <input className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-indigo-500/50 outline-none transition-colors" value={editedJd.education} onChange={e => handleChange('education', e.target.value)} />
+            <input className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-indigo-500/50 outline-none transition-colors" value={editedJd.education || ''} onChange={e => handleChange('education', e.target.value)} />
           </div>
           <div className="space-y-2">
             <Label icon={<Activity className="w-4 h-4" />} text="薪资待遇" />
-            <input className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-indigo-500/50 outline-none transition-colors" value={editedJd.remarks} onChange={e => handleChange('remarks', e.target.value)} />
+            <input className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-indigo-500/50 outline-none transition-colors" value={editedJd.remarks || ''} onChange={e => handleChange('remarks', e.target.value)} />
           </div>
           <div className="space-y-2">
             <Label icon={<Vote className="w-4 h-4" />} text="软技能" />
-            <input className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-indigo-500/50 outline-none transition-colors" value={editedJd.culture_fit.join(', ')} onChange={e => handleChange('culture_fit', e.target.value.split(/[,，]/).map(s => s.trim()).filter(Boolean))} />
+            <input className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-indigo-500/50 outline-none transition-colors" value={(editedJd.culture_fit || []).join(', ')} onChange={e => handleChange('culture_fit', e.target.value.split(/[,，]/).map(s => s.trim()).filter(Boolean))} />
           </div>
         </div>
       </div>
@@ -273,7 +514,7 @@ function JdReviewPanel({ jd, onConfirm }: { jd: StructuredJD, onConfirm: (jd: St
 
 
 // --- 1. LANDING PAGE ---
-function LandingPage({ onStart }: { onStart: (role: string) => void }) {
+function LandingPage({ onStart, isLogged, onSkipToDashboard }: { onStart: (role: string) => void, isLogged?: boolean, onSkipToDashboard?: () => void }) {
   const [input, setInput] = useState('');
   const [suggestionIdx, setSuggestionIdx] = useState(0);
 
@@ -321,10 +562,17 @@ function LandingPage({ onStart }: { onStart: (role: string) => void }) {
               </AnimatePresence>
             </div>
           )}
-          <MagneticButton type="submit" className="bg-white text-black hover:bg-indigo-50 hover:scale-105 hover:shadow-[0_0_40px_rgba(255,255,255,0.3)] px-12 h-20 rounded-2xl font-black text-xl tracking-[0.2em] transition-all shadow-[0_0_30px_rgba(255,255,255,0.1)] flex items-center gap-3 whitespace-nowrap active:scale-95 uppercase">
-            开始筛选
-            <ArrowRight className="w-5 h-5" />
-          </MagneticButton>
+          <div className="flex gap-4">
+            <MagneticButton type="submit" className="bg-white text-black hover:bg-indigo-50 hover:scale-105 hover:shadow-[0_0_40px_rgba(255,255,255,0.3)] px-12 h-20 rounded-2xl font-black text-xl tracking-[0.2em] transition-all shadow-[0_0_30px_rgba(255,255,255,0.1)] flex items-center gap-3 whitespace-nowrap active:scale-95 uppercase">
+              开始筛选
+              <ArrowRight className="w-5 h-5" />
+            </MagneticButton>
+          </div>
+          {isLogged && (
+            <button type="button" onClick={onSkipToDashboard} className="absolute right-0 translate-x-[calc(100%+1.5rem)] px-8 h-20 rounded-2xl border border-indigo-500/30 text-indigo-300 bg-black/40 hover:bg-indigo-500/10 transition-colors text-lg font-bold flex items-center justify-center whitespace-nowrap backdrop-blur-md hover:shadow-[0_0_20px_rgba(99,102,241,0.2)]">
+              直接进入简历库
+            </button>
+          )}
         </form>
       </div>
     </div>
@@ -640,16 +888,86 @@ function ExecutionDashboard({
     }
   };
 
+  const handleCloudSource = async (type: 'public' | 'private') => {
+    try {
+      setPhase('PROCESSING');
+      setLogs(prev => [...prev, "[INFO] 从云端拉取简历数据..."]);
+
+      let resultResumes = [];
+      if (type === 'public') {
+        resultResumes = await api.fetchPublicResumes();
+      } else {
+        const val = prompt("请输入您存放在云端的私有简历包的文件名 (例如: my_resumes.zip):");
+        if (!val) {
+          setPhase('INGEST');
+          return;
+        }
+        resultResumes = await api.fetchPrivateResumes(val.trim());
+      }
+
+      setProcessedCount(resultResumes.length);
+      setLogs(prev => [...prev, `[SUCCESS] 简历云端拉取完成，共解析 ${resultResumes.length} 份简历...`]);
+      setLogs(prev => [...prev, "[ANALYSIS] 正在进行多维能力画像匹配... (可能需要1-2分钟)"]);
+
+      const ranks = await api.analyzeResumes();
+      setLogs(prev => [...prev, `[RESULT] 完成分析，发现 ${ranks.length} 位高潜力候选人。`]);
+      setTimeout(() => {
+        setCandidates(ranks);
+        setPhase('RESULTS');
+      }, 1000);
+
+    } catch (e) {
+      setLogs(prev => [...prev, `[ERROR] 处理失败: ${e}`]);
+      alert("处理失败，请重试");
+      setPhase('INGEST');
+    }
+  };
+
+  const handleUploadToPrivateCloud = async () => {
+    if (uploadedFiles.length !== 1 || !uploadedFiles[0].name.endsWith('.zip')) {
+      alert("请选择且仅选择一个 ZIP 格式的文件作为您的云端私有简历池。");
+      return;
+    }
+    if (!confirm(`即将把 ${uploadedFiles[0].name} 上传至您的专属云端，请确认？`)) return;
+
+    try {
+      await api.uploadPrivateResume(uploadedFiles[0]);
+      alert("上传云端成功！您之后可以通过'拉取账号私有'随时调取该文件。");
+      setUploadedFiles([]);
+    } catch (e) {
+      console.error(e);
+      alert("上传失败");
+    }
+  };
+
   if (phase === 'INGEST') {
     return (
       <div className="h-full flex flex-col items-center justify-center p-8">
-        <div className="w-full max-w-3xl space-y-6">
-          <div onDragOver={e => { e.preventDefault(); setIsDragOver(true) }} onDragLeave={() => setIsDragOver(false)} onDrop={handleDrop} onClick={() => fileInputRef.current?.click()} className={cn("w-full aspect-[2/1] border-2 border-dashed rounded-[2rem] flex flex-col items-center justify-center relative overflow-hidden cursor-pointer transition-all duration-300", isDragOver ? "border-indigo-500 bg-indigo-500/10 scale-[1.02]" : "border-white/10 bg-white/[0.02] hover:border-indigo-500/30 hover:bg-white/[0.04]")}>
+        <div className="w-full max-w-3xl space-y-6 flex flex-col items-center">
+
+          {/* Main Dropzone for Local Processing */}
+          <div
+            onDragOver={e => { e.preventDefault(); setIsDragOver(true) }}
+            onDragLeave={() => setIsDragOver(false)}
+            onDrop={handleDrop}
+            onClick={() => fileInputRef.current?.click()}
+            className={cn("w-full aspect-[2.5/1] border-2 border-dashed rounded-[2rem] flex flex-col items-center justify-center relative overflow-hidden cursor-pointer transition-all duration-300", isDragOver ? "border-indigo-500 bg-indigo-500/10 scale-[1.02]" : "border-white/10 bg-white/[0.02] hover:border-indigo-500/30 hover:bg-white/[0.04]")}
+          >
             <input ref={fileInputRef} type="file" multiple accept=".pdf,.txt,.md,.zip" onChange={e => { if (e.target.files?.length) setUploadedFiles(prev => [...prev, ...Array.from(e.target.files!)]) }} className="hidden" />
             <div className={cn("w-20 h-20 rounded-2xl flex items-center justify-center mb-6 transition-all duration-300", isDragOver ? "bg-indigo-600 scale-110" : "bg-black border border-white/10")}><UploadCloud className={cn("w-8 h-8", isDragOver ? "text-white" : "text-indigo-400")} /></div>
             <h3 className="text-2xl font-bold text-white mb-2">{isDragOver ? "释放以上传文件" : "拖拽简历到这里"}</h3>
-            <p className="text-zinc-500 text-sm text-center">支持 PDF, TXT, ZIP <br /><span className="text-indigo-400 hover:underline">或点击选择文件</span></p>
+            <p className="text-zinc-500 text-sm text-center mb-4">上传并自动执行匹配 (支持 PDF, TXT, ZIP) <br /><span className="text-indigo-400 hover:underline">或点击选择文件</span></p>
           </div>
+
+          <div className="flex gap-4 w-full justify-center">
+            <button onClick={() => handleCloudSource('public')} className="px-6 py-3 bg-white/5 border border-white/10 text-white rounded-xl hover:bg-white/10 transition-colors text-sm font-bold flex items-center gap-2">
+              <UploadCloud className="w-4 h-4 text-emerald-400" /> 直接使用公有简历池匹配
+            </button>
+            <button onClick={() => handleCloudSource('private')} className="px-6 py-3 bg-white/5 border border-white/10 text-white rounded-xl hover:bg-white/10 transition-colors text-sm font-bold flex items-center gap-2">
+              <UploadCloud className="w-4 h-4 text-purple-400" /> 拉取账号私有简历池匹配
+            </button>
+          </div>
+
           {uploadedFiles.length > 0 && (
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-white/[0.02] border border-white/10 rounded-2xl p-6">
               <div className="flex justify-between items-center mb-4"><h4 className="text-sm font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-2"><FileText className="w-4 h-4" />已选择 {uploadedFiles.length} 份简历</h4><button onClick={(e) => { e.stopPropagation(); setUploadedFiles([]) }} className="text-xs text-zinc-500 hover:text-red-400 transition-colors">清空全部</button></div>
@@ -657,7 +975,10 @@ function ExecutionDashboard({
               {uploadProgress > 0 && <div className="mt-4"><div className="h-2 bg-white/5 rounded-full overflow-hidden"><motion.div className="h-full bg-gradient-to-r from-indigo-500 to-purple-500" style={{ width: `${uploadProgress}%` }} /></div></div>}
             </motion.div>
           )}
-          <div className="flex justify-center"><button onClick={startProcessing} disabled={uploadedFiles.length === 0} className={cn("px-12 py-4 rounded-2xl font-bold text-base transition-all flex items-center gap-3", uploadedFiles.length > 0 ? "bg-indigo-600 hover:bg-indigo-500 text-white shadow-[0_0_40px_rgba(79,70,229,0.4)] active:scale-95" : "bg-white/5 text-zinc-600 cursor-not-allowed")}><Cpu className="w-5 h-5" />开始解析与匹配</button></div>
+          <div className="flex justify-center gap-4">
+            <button onClick={startProcessing} disabled={uploadedFiles.length === 0} className={cn("px-12 py-4 rounded-2xl font-bold text-base transition-all flex items-center gap-3", uploadedFiles.length > 0 ? "bg-indigo-600 hover:bg-indigo-500 text-white shadow-[0_0_40px_rgba(79,70,229,0.4)] active:scale-95" : "bg-white/5 text-zinc-600 cursor-not-allowed")}><Cpu className="w-5 h-5" />本地解析与匹配</button>
+            <button onClick={handleUploadToPrivateCloud} disabled={uploadedFiles.length === 0} className={cn("px-6 py-4 rounded-2xl font-bold text-base transition-all flex items-center", uploadedFiles.length > 0 ? "bg-[#0A0A0B] border border-indigo-500/50 hover:bg-indigo-500/10 text-indigo-400 shadow-[0_0_20px_rgba(79,70,229,0.1)] active:scale-95" : "bg-white/5 text-zinc-600 cursor-not-allowed hidden")}>传为专有包</button>
+          </div>
         </div>
       </div>
     );

@@ -25,6 +25,18 @@ if not SILICON_API_KEY:
 # Available models in order of preference
 MODEL_CONFIGS = [
     {
+        "id": "MiniMax/MiniMax-M2.5",
+        "name": "MiniMax-M2.5 (ModelScope)",
+        "base_url": "https://api-inference.modelscope.cn/v1",
+        "api_key": MS_API_KEY
+    },
+    {
+        "id": "stepfun-ai/Step-3.5-Flash",
+        "name": "Step-3.5-Flash (ModelScope)",
+        "base_url": "https://api-inference.modelscope.cn/v1",
+        "api_key": MS_API_KEY
+    },
+    {
         "id": "ZhipuAI/GLM-4.7",
         "name": "GLM-4.7 (ModelScope)",
         "base_url": "https://api-inference.modelscope.cn/v1",
@@ -50,7 +62,7 @@ MODEL_CONFIGS = [
     },
 ]
 
-# Track current model index (starts with first = GLM)
+# Track current model index (starts with first = step fun)
 current_model_idx = 0
 
 SYSTEM_PROMPT = """你是一个专业的招聘专家助手 Copilot。你的任务是帮助没有专业HR的小公司进行招聘流程。
@@ -609,10 +621,14 @@ def generate_action(candidate_name: str, action_type: str, job_title: str) -> Ac
         # Extract JSON
         idx = conn.find('{')
         end = conn.rfind('}')
+        
+        json_str = conn
         if idx != -1 and end != -1:
-            conn = conn[idx:end+1]
-        data = json.loads(conn)
+            json_str = conn[idx:end+1]
+            
+        data = json.loads(json_str, strict=False)
         return ActionResponse(**data)
     except Exception as e:
         print(f"Action Generation Error: {e}")
-        return ActionResponse(content="生成失败", interview_questions=[])
+        # 如果 JSON 彻底损坏，把裸文本塞进 content 降级返回，这是比直接说生成失败更好的兜底
+        return ActionResponse(content=conn, interview_questions=[])

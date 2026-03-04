@@ -74,6 +74,7 @@ export interface ActionResponse {
 
 // Session Management
 const SESSION_KEY = 'jobos_session_id';
+const ACCOUNT_KEY = 'jobos_account_name';
 
 function getSessionId(): string {
 	let sid = localStorage.getItem(SESSION_KEY);
@@ -91,12 +92,66 @@ function getSessionId(): string {
 function getHeaders(contentType = 'application/json'): HeadersInit {
 	return {
 		'Content-Type': contentType,
-		'X-Session-ID': getSessionId()
+		'X-Session-ID': getSessionId(),
+		'X-Account-Name': localStorage.getItem(ACCOUNT_KEY) || ''
 	};
 }
 
 // API Functions
 export const api = {
+	// Auth
+	async login(inviteCode: string): Promise<{ status: string, account_name: string }> {
+		const res = await fetch(`${API_BASE}/login`, {
+			method: 'POST',
+			headers: getHeaders(),
+			body: JSON.stringify({ invite_code: inviteCode })
+		});
+		if (!res.ok) {
+			const err = await res.json();
+			throw new Error(err.detail || `Login failed: ${res.status}`);
+		}
+		const data = await res.json();
+		localStorage.setItem(ACCOUNT_KEY, data.account_name);
+		return data;
+	},
+
+	async logout(): Promise<void> {
+		try {
+			await fetch(`${API_BASE}/logout`, {
+				method: 'POST',
+				headers: getHeaders()
+			});
+		} catch (e) {
+			console.error("Logout error", e);
+		}
+		localStorage.removeItem(ACCOUNT_KEY);
+	},
+
+	async heartbeat(): Promise<void> {
+		const res = await fetch(`${API_BASE}/heartbeat`, {
+			method: 'POST',
+			headers: getHeaders()
+		});
+		if (!res.ok) {
+			const err = await res.json();
+			throw new Error(err.detail || `Heartbeat failed`);
+		}
+	},
+
+	// Workspace snapshot
+	async saveWorkspace(jdData: any, candidates: any[], interviewCache: any): Promise<void> {
+		const res = await fetch(`${API_BASE}/save_workspace`, {
+			method: 'POST',
+			headers: getHeaders(),
+			body: JSON.stringify({
+				jd_data: jdData,
+				candidates: candidates,
+				interview_cache: interviewCache
+			})
+		});
+		if (!res.ok) throw new Error(`Save workspace failed: ${res.status}`);
+	},
+
 	// Multi-turn chat for requirement clarification
 	async chat(message: string, history: ChatMessage[] = []): Promise<ChatResponse> {
 		const res = await fetch(`${API_BASE}/chat`, {
@@ -127,6 +182,16 @@ export const api = {
 		return res.json();
 	},
 
+	// Push JD context directly to Session (for History Restoration)
+	async setCurrentJd(jd: JobDefinition): Promise<void> {
+		const res = await fetch(`${API_BASE}/set_current_jd`, {
+			method: 'POST',
+			headers: getHeaders(),
+			body: JSON.stringify(jd)
+		});
+		if (!res.ok) throw new Error(`Set current JD failed: ${res.status}`);
+	},
+
 	// Upload resumes (zip/txt/pdf)
 	async uploadResumes(file: File): Promise<Resume[]> {
 		const formData = new FormData();
@@ -148,7 +213,7 @@ export const api = {
 	async uploadMultipleResumes(files: File[]): Promise<Resume[]> {
 		// Backend expects a single file (zip)
 		// For multiple PDFs, we need to handle differently or upload one by one
-		const allResumes: Resume[] = [];
+		let latestResumes: Resume[] = [];
 
 		for (const file of files) {
 			const formData = new FormData();
@@ -162,12 +227,14 @@ export const api = {
 				body: formData
 			});
 			if (res.ok) {
-				const resumes = await res.json();
-				allResumes.push(...resumes);
+				// The backend returns the cumulative amount of resumes for the user in the session
+				latestResumes = await res.json();
+			} else {
+				console.error(`Upload failed for ${file.name}`);
 			}
 		}
 
-		return allResumes;
+		return latestResumes;
 	},
 
 	// Generate fake resumes for testing
@@ -202,6 +269,59 @@ export const api = {
 		});
 		if (!res.ok) throw new Error(`Generate action failed: ${res.status}`);
 		return res.json();
+	},
+
+	// Fetch history records from cloud node
+	async getAccountHistory(recordType?: string): Promise<any[]> {
+		const url = recordType ? `${API_BASE}/account_history?record_type=${recordType}` : `${API_BASE}/account_history`;
+		const res = await fetch(url, {
+			headers: getHeaders()
+		});
+		if (!res.ok) throw new Error(`Fetch history failed: ${res.status}`);
+		return res.json();
+	},
+
+	// Upload a private resume zip to cloud node
+	async uploadPrivateResume(file: File): Promise<any> {
+		const formData = new FormData();
+		formData.append('file', file);
+		const headers: any = { 'X-Session-ID': getSessionId() };
+
+		const res = await fetch(`${API_BASE}/upload_private_resume`, {
+			method: 'POST',
+			headers: headers,
+			body: formData
+		});
+		if (!res.ok) throw new Error(`Upload private resume failed: ${res.status}`);
+		return res.json();
+	},
+
+	// Trigger pulling private resumes from cloud and parsing them
+	async fetchPrivateResumes(filename: string): Promise<Resume[]> {
+		const res = await fetch(`${API_BASE}/fetch_private_resumes?filename=${filename}`, {
+			method: 'POST',
+			headers: getHeaders()
+		});
+		if (!res.ok) throw new Error(`Fetch private resumes failed: ${res.status}`);
+		return res.json();
+	},
+
+	// Fetch the shared/public 'output_resume.zip' from cloud
+	async fetchPublicResumes(): Promise<Resume[]> {
+		const res = await fetch(`${API_BASE}/fetch_resumes_from_cloud`, {
+			method: 'POST',
+			headers: getHeaders()
+		});
+		if (!res.ok) throw new Error(`Fetch public resumes failed: ${res.status}`);
+		return res.json();
+	},
+
+	setSessionId(newId: string) {
+		localStorage.setItem(SESSION_KEY, newId);
+	},
+
+	getSessionId() {
+		return getSessionId();
 	}
 };
 
