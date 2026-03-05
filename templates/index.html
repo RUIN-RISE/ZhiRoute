@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recruitment Copilot | 智能招聘助手</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="brand">
+                <div class="logo-icon">RC</div>
+                <h1>Recruit<span class="highlight">Copilot</span></h1>
+            </div>
+            <nav>
+                <a href="#" class="nav-item active" data-step="1">1. 需求澄清</a>
+                <a href="#" class="nav-item disabled" data-step="2">2. JD 生成</a>
+                <a href="#" class="nav-item disabled" data-step="3">3. 简历解析</a>
+                <a href="#" class="nav-item disabled" data-step="4">4. 匹配排行</a>
+            </nav>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="content-area">
+
+            <!-- Step 1: Initial Requirement -->
+            <section id="step-1" class="step-section active">
+                <div class="section-header">
+                    <h2>我们要招什么样的人？</h2>
+                    <p>请简单描述您的招聘需求，AI 将协助您完善细节。</p>
+                </div>
+                <div class="input-card">
+                    <textarea id="initial-req" placeholder="例如：我想招一个有3年经验的 Python 后端开发，熟悉 FastAPI..."></textarea>
+                    <button id="btn-start-clarify" class="btn-primary">开始澄清 <span class="arrow">→</span></button>
+                    <div id="loading-clarify" class="loading hidden">正在分析需求...</div>
+                </div>
+            </section>
+
+            <!-- Step 1.5: Clarification Chat -->
+            <section id="step-clarify" class="step-section hidden">
+                <div class="section-header">
+                    <h2>💬 需求澄清对话</h2>
+                    <p>与 AI 对话，明确您的招聘需求。</p>
+                </div>
+                <div id="chat-container" class="chat-box">
+                    <!-- Chat messages will be added here -->
+                </div>
+                <div id="quick-replies" class="quick-reply-container">
+                    <!-- Quick reply buttons will be added here -->
+                </div>
+                <div class="chat-input-row">
+                    <input type="text" id="chat-input" placeholder="输入消息..." />
+                    <button id="btn-send-chat" class="btn-primary">发送</button>
+                </div>
+                <div class="action-row mt-20">
+                    <button id="btn-generate-jd" class="btn-primary hidden">✅ 确认需求并生成 JD</button>
+                    <button id="btn-restart-chat" class="btn-secondary" style="margin-left: 10px;">🔄 重新开始</button>
+                </div>
+                <div id="loading-jd" class="loading hidden">正在撰写 JD...</div>
+            </section>
+
+            <!-- Step 2: JD Preview -->
+            <section id="step-2" class="step-section hidden">
+                <div class="section-header">
+                    <h2>岗位描述 (JD) 预览</h2>
+                    <p>已根据您的回答生成标准 JD。</p>
+                </div>
+                <div id="jd-display" class="jd-card">
+                    <!-- Dynamic JD Content -->
+                </div>
+                <div class="action-row">
+                    <button id="btn-confirm-jd" class="btn-primary">确认并导入简历</button>
+                    <button id="btn-retry-jd" class="btn-secondary" style="margin-left: 10px;">↺ 重生成 JD</button>
+                </div>
+            </section>
+
+            <!-- Step 3: Resume Import -->
+            <section id="step-3" class="step-section hidden">
+                <div class="section-header">
+                    <h2>导入候选人简历</h2>
+                    <p>上传简历文件或生成模拟数据进行测试。</p>
+                </div>
+                <div class="upload-area">
+                    <div class="upload-options">
+                        <label for="file-upload-input" class="btn-primary"
+                            style="display:inline-block; text-align:center; padding-top:10px;">
+                            📁 上传简历 (支持 Zip/Txt/PDF)
+                        </label>
+                        <input type="file" id="file-upload-input" class="hidden" accept=".zip,.txt,.md,.pdf" />
+
+                        <div id="loading-upload" class="loading hidden" style="margin-top:10px;">正在解析简历...</div>
+
+                        <div class="divider" style="margin: 1rem 0; color: #666;">或者 (仅供测试)</div>
+
+                        <button id="btn-fake-data" class="btn-secondary" onclick="handleFakeData()">
+                            <span class="icon">🎲</span> 生成 5 份模拟简历
+                        </button>
+                    </div>
+                    <div id="resume-list" class="resume-list hidden">
+                        <h3>已加载简历</h3>
+                        <ul id="resume-items"></ul>
+                    </div>
+                </div>
+                <div class="action-row mt-20">
+                    <button id="btn-analyze" class="btn-primary hidden">开始匹配分析</button>
+                </div>
+                <div id="loading-analysis" class="loading hidden">正在深度分析匹配度...</div>
+            </section>
+
+            <!-- Step 4: Ranking & Action -->
+            <section id="step-4" class="step-section hidden">
+                <div class="section-header">
+                    <h2>候选人匹配排行</h2>
+                    <p>AI 已根据证据链对候选人进行排序。</p>
+                    <button id="btn-retry-analyze" class="btn-secondary" style="float: right; margin-top: -40px;">↺
+                        重新分析</button>
+                </div>
+                <div id="ranking-container" class="ranking-grid">
+                    <!-- Candidate Cards -->
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <!-- Action Modal -->
+    <div id="action-modal" class="modal hidden">
+        <div class="modal-content">
+            <span class="close-modal">&times;</span>
+            <h3 id="modal-title">生成操作</h3>
+            <div id="modal-body" class="modal-body">
+                <p>正在生成内容...</p>
+            </div>
+            <div class="modal-actions">
+                <button class="btn-secondary copy-btn">复制内容</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/app.js"></script>
+</body>
+
+</html>
