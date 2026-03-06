@@ -33,15 +33,15 @@ export function InterviewPanel({ candidates }: { candidates: CandidateRank[] }) 
     };
 
     return (
-        <div className="h-full flex flex-col lg:flex-row gap-8 p-6 lg:p-10 animate-in fade-in duration-700 relative z-20 overflow-hidden">
+        <div className="h-full flex flex-col lg:flex-row gap-8 p-6 lg:p-10 animate-in fade-in duration-700 relative z-20 overflow-hidden bg-black">
             {/* 装饰背景 */}
-            <div className="absolute top-[-10%] right-[-10%] w-[500px] h-[500px] bg-primary/5 rounded-full blur-[120px] pointer-events-none" />
+            <div className="absolute top-[-10%] right-[-10%] w-[500px] h-[500px] bg-blue-600/5 rounded-full blur-[120px] pointer-events-none" />
 
             {/* 候选人侧边栏: 高级感玻璃名单 */}
             <div className="w-full lg:w-72 shrink-0 flex flex-col gap-6 relative z-10">
                 <div className="flex items-center justify-between px-2">
                     <h3 className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.25em]">待处理人才序列</h3>
-                    <div className="px-2 py-0.5 bg-primary/10 border border-primary/20 rounded text-[9px] text-primary font-bold">{candidates.length} 人</div>
+                    <div className="px-2 py-0.5 bg-blue-500/10 border border-blue-500/20 rounded text-[9px] text-blue-400 font-bold">{candidates.length} 人</div>
                 </div>
 
                 <div className="flex-1 space-y-3 overflow-y-auto pr-2 custom-scrollbar">
@@ -61,12 +61,12 @@ export function InterviewPanel({ candidates }: { candidates: CandidateRank[] }) 
                             )}
                         >
                             {selectedCandidate?.resume_id === c.resume_id && (
-                                <div className="absolute top-0 right-0 w-12 h-12 bg-primary/10 blur-xl rounded-full translate-x-4 -translate-y-4" />
+                                <div className="absolute top-0 right-0 w-12 h-12 bg-blue-500/10 blur-xl rounded-full translate-x-4 -translate-y-4" />
                             )}
                             <div className="font-display font-bold text-lg mb-1 tracking-tight">{c.name}</div>
                             <div className={cn(
                                 "text-[10px] uppercase tracking-widest font-bold",
-                                selectedCandidate?.resume_id === c.resume_id ? "text-primary" : "text-zinc-600"
+                                selectedCandidate?.resume_id === c.resume_id ? "text-blue-400" : "text-zinc-600"
                             )}>
                                 匹配度：{c.score}%
                             </div>
@@ -99,13 +99,13 @@ export function InterviewPanel({ candidates }: { candidates: CandidateRank[] }) 
                         >
                             <span className={cn(
                                 "transition-colors duration-300",
-                                actionType === t.id ? "text-primary" : "opacity-30"
+                                actionType === t.id ? "text-blue-400" : "opacity-30"
                             )}>{t.icon}</span>
                             {t.label}
                             {actionType === t.id && (
                                 <motion.div
                                     layoutId="activeTab"
-                                    className="absolute bottom-0 left-0 w-full h-[2px] bg-primary shadow-[0_0_10px_hsl(var(--primary))]"
+                                    className="absolute bottom-0 left-0 w-full h-[2px] bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.5)]"
                                 />
                             )}
                         </button>
@@ -122,7 +122,7 @@ export function InterviewPanel({ candidates }: { candidates: CandidateRank[] }) 
                                 className="h-full flex items-center justify-center flex-col text-zinc-600 gap-8"
                             >
                                 <div className="w-24 h-24 rounded-[2rem] bg-white/[0.02] border border-white/5 flex items-center justify-center relative">
-                                    <div className="absolute inset-0 bg-primary/5 rounded-full blur-2xl animate-pulse" />
+                                    <div className="absolute inset-0 bg-blue-500/5 rounded-full blur-2xl animate-pulse" />
                                     <Mail className="w-10 h-10 opacity-20 relative z-10" />
                                 </div>
                                 <div className="text-center space-y-2">
@@ -145,10 +145,10 @@ export function InterviewPanel({ candidates }: { candidates: CandidateRank[] }) 
                                 className="h-full flex items-center justify-center flex-col gap-6"
                             >
                                 <div className="relative">
-                                    <div className="w-20 h-20 border-2 border-primary/20 rounded-full animate-ping" />
-                                    <Loader2 className="w-8 h-8 animate-spin text-primary absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
+                                    <div className="w-20 h-20 border-2 border-blue-500/20 rounded-full animate-ping" />
+                                    <Loader2 className="w-8 h-8 animate-spin text-blue-500 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
                                 </div>
-                                <p className="text-[10px] font-black uppercase tracking-[0.4em] text-primary animate-pulse">正在生成文案...</p>
+                                <p className="text-[10px] font-black uppercase tracking-[0.4em] text-blue-400 animate-pulse">正在生成文案...</p>
                             </motion.div>
                         )}
 
@@ -160,8 +160,8 @@ export function InterviewPanel({ candidates }: { candidates: CandidateRank[] }) 
                             >
                                 {/* 预览卡片 */}
                                 <div className="bg-white/[0.02] border border-white/[0.08] rounded-[2rem] p-8 relative overflow-hidden shadow-inner ring-1 ring-inset ring-white/5">
-                                    <div className="absolute top-0 left-0 w-20 h-[1px] bg-primary" />
-                                    <h4 className="text-primary text-[10px] font-black uppercase tracking-[0.3em] mb-6 flex items-center gap-3">
+                                    <div className="absolute top-0 left-0 w-20 h-[1px] bg-blue-500" />
+                                    <h4 className="text-blue-400 text-[10px] font-black uppercase tracking-[0.3em] mb-6 flex items-center gap-3">
                                         <Mail className="w-4 h-4 opacity-70" /> {actionType === 'interview' ? '面试邀请' : actionType === 'offer' ? '入职通知' : '婉拒信'}草稿
                                     </h4>
                                     <div className="whitespace-pre-wrap leading-[1.8] text-zinc-200 font-sans text-[17px] font-medium opacity-90">
@@ -174,15 +174,15 @@ export function InterviewPanel({ candidates }: { candidates: CandidateRank[] }) 
                                 </div>
 
                                 {actionType === 'interview' && generatedContent.interview_questions && (
-                                    <div className="bg-primary/5 p-8 rounded-[2rem] border border-primary/20 relative overflow-hidden group">
-                                        <div className="absolute bottom-0 right-0 w-32 h-32 bg-primary/10 blur-[80px] pointer-events-none group-hover:bg-primary/20 transition-all duration-700" />
-                                        <h4 className="text-primary text-[10px] font-black uppercase tracking-[0.3em] mb-6 flex items-center gap-3">
+                                    <div className="bg-blue-500/5 p-8 rounded-[2rem] border border-blue-500/20 relative overflow-hidden group">
+                                        <div className="absolute bottom-0 right-0 w-32 h-32 bg-blue-500/10 blur-[80px] pointer-events-none group-hover:bg-blue-500/20 transition-all duration-700" />
+                                        <h4 className="text-blue-400 text-[10px] font-black uppercase tracking-[0.3em] mb-6 flex items-center gap-3">
                                             <Zap className="w-4 h-4" /> 深度面评建议问案
                                         </h4>
                                         <div className="grid grid-cols-1 gap-4">
                                             {generatedContent.interview_questions.map((q: string, i: number) => (
                                                 <div key={i} className="flex gap-5 p-4 rounded-xl hover:bg-white/[0.03] transition-colors border border-transparent hover:border-white/5 group/q">
-                                                    <span className="text-primary font-mono text-sm opacity-40 group-hover/q:opacity-100 transition-opacity">#{i + 1}</span>
+                                                    <span className="text-blue-400 font-mono text-sm opacity-40 group-hover/q:opacity-100 transition-opacity">#{i + 1}</span>
                                                     <span className="text-zinc-300 text-[15px] leading-relaxed font-medium">{q}</span>
                                                 </div>
                                             ))}

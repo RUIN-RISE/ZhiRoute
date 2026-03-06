@@ -1,6 +1,6 @@
 ﻿import { useState } from 'react';
 import { FileText, User, Activity, Code2, Target, ShieldCheck, Vote, ArrowRight } from 'lucide-react';
-import { MagneticButton, Label } from './shared';
+import { MagneticButton } from './shared';
 import type { StructuredJD } from '../types';
 
 /**
@@ -20,68 +20,78 @@ export function JdReviewPanel({
     };
 
     return (
-        <div className="w-full h-full max-w-5xl mx-auto flex flex-col p-6 lg:p-10 animate-fadeInUp relative z-20">
-            {/* 背景氛围层 - 保持全局一致性 */}
+        <div className="w-full h-full max-w-6xl mx-auto flex flex-col p-6 lg:p-12 animate-fadeInUp relative z-20">
+            {/* 更细腻的背景渐变 */}
             <div className="absolute top-0 left-0 w-full h-full pointer-events-none z-0 overflow-hidden">
-                <div className="absolute top-1/4 left-1/3 w-96 h-96 bg-blue-900/10 rounded-full blur-[120px] animate-float opacity-50" />
-                <div className="absolute inset-0 bg-grid opacity-30" />
+                <div className="absolute top-[-20%] right-[-10%] w-[600px] h-[600px] bg-blue-600/10 rounded-full blur-[140px] opacity-30" />
+                <div className="absolute bottom-[-20%] left-[-10%] w-[600px] h-[600px] bg-indigo-600/10 rounded-full blur-[140px] opacity-20" />
             </div>
 
-            <div className="flex-1 flex flex-col glass-panel rounded-[2.5rem] overflow-hidden relative z-10 shadow-2xl">
-                {/* 顶部装饰发光位 */}
-                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-1/2 h-[1px] bg-gradient-to-r from-transparent via-blue-500/30 to-transparent" />
+            <div className="flex-1 flex flex-col bg-[#1c1c1e]/40 backdrop-blur-[40px] rounded-[3.5rem] border border-white/[0.08] shadow-[0_48px_96px_-24px_rgba(0,0,0,0.8)] overflow-hidden relative z-10">
+                {/* 顶层极细边缘光 */}
+                <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
 
-                {/* 顶部标题栏 */}
-                <div className="px-10 py-8 border-b border-white/[0.05] flex items-center justify-between bg-white/[0.01]">
-                    <div className="flex items-center gap-6">
-                        <div className="w-14 h-14 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center shadow-[inset_0_0_20px_rgba(99,102,241,0.1)]">
-                            <FileText className="w-7 h-7 text-indigo-400" />
+                {/* 顶部标题栏 - 绝对简约 */}
+                <div className="px-14 py-12 border-b border-white/[0.04] flex items-center justify-between bg-white/[0.01]">
+                    <div className="flex items-center gap-10">
+                        <div className="relative">
+                            <div className="absolute inset-0 bg-blue-500/25 rounded-[1.25rem] blur-2xl animate-pulse" />
+                            <div className="w-20 h-20 rounded-[1.25rem] bg-zinc-900/60 border border-white/10 flex items-center justify-center relative z-10 shadow-2xl group transition-all duration-500">
+                                <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                                <FileText className="w-10 h-10 text-white opacity-85 group-hover:scale-105 transition-transform duration-700" />
+                            </div>
                         </div>
                         <div>
-                            <h2 className="text-2xl font-bold text-white tracking-tight">确认职位描述</h2>
-                            <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-[0.2em] mt-1.5 opacity-60">请核对 AI 提取的核心画像数据</p>
+                            <h2 className="text-4xl font-bold text-white tracking-tight">确认职位描述</h2>
+                            <p className="text-sm text-zinc-500 font-medium tracking-wide mt-3 flex items-center gap-3">
+                                <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(59,130,246,0.5)]" />
+                                正在进行招聘建模
+                            </p>
                         </div>
                     </div>
                     <MagneticButton
                         onClick={() => onConfirm(editedJd)}
-                        className="bg-white text-black px-10 py-3.5 rounded-xl font-bold flex items-center gap-3 hover:bg-zinc-200 transition-all hover:scale-105 active:scale-95 shadow-[0_10px_30px_rgba(255,255,255,0.1)]"
+                        className="bg-white text-black px-14 py-4.5 rounded-[1rem] font-bold text-lg flex items-center gap-3 hover:bg-[#f5f5f7] transition-all hover:shadow-[0_24px_48px_rgba(255,255,255,0.15)] active:scale-95 group"
                     >
-                        确认并继续 <ArrowRight className="w-5 h-5" />
+                        确认并继续 <ArrowRight className="w-6 h-6 group-hover:translate-x-1.5 transition-transform duration-300" />
                     </MagneticButton>
                 </div>
 
                 {/* 主体编辑区域 */}
-                <div className="flex-1 overflow-y-auto p-10 custom-scrollbar bg-black/20">
-                    <div className="grid grid-cols-2 gap-8">
+                <div className="flex-1 overflow-y-auto p-14 custom-scrollbar space-y-16">
+                    <div className="grid grid-cols-2 gap-x-16 gap-y-12">
                         {/* 基础信息 */}
-                        <div className="space-y-3">
-                            <Label icon={<User className="w-4 h-4 text-blue-400" />} text="职位名称" />
-                            <div className="relative group">
-                                <input
-                                    className="w-full bg-zinc-900/40 border border-white/10 rounded-2xl px-6 py-4 text-zinc-100 text-lg font-bold focus:border-blue-500/40 focus:ring-4 focus:ring-blue-500/5 outline-none transition-all placeholder:text-zinc-700"
-                                    value={editedJd.role || ''}
-                                    onChange={(e) => handleChange('role', e.target.value)}
-                                    placeholder="输入职位名称..."
-                                />
-                                <div className="absolute inset-0 rounded-2xl bg-blue-500/5 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity" />
-                            </div>
+                        <div className="space-y-4">
+                            <label className="flex items-center gap-2.5 text-xs font-bold text-zinc-500 uppercase tracking-[0.2em] px-1">
+                                <User className="w-4 h-4 text-zinc-400" /> 职位名称
+                            </label>
+                            <input
+                                className="w-full bg-white/[0.04] border border-white/[0.05] rounded-[1.25rem] px-8 py-6 text-white text-2xl font-bold focus:bg-white/[0.08] focus:border-white/20 focus:ring-8 focus:ring-white/5 outline-none transition-all placeholder:text-zinc-800 shadow-inner"
+                                value={editedJd.role || ''}
+                                onChange={(e) => handleChange('role', e.target.value)}
+                                placeholder="输入职位名称..."
+                            />
                         </div>
 
-                        <div className="space-y-3">
-                            <Label icon={<Activity className="w-4 h-4 text-emerald-400" />} text="经验要求" />
+                        <div className="space-y-4">
+                            <label className="flex items-center gap-2.5 text-xs font-bold text-zinc-500 uppercase tracking-[0.2em] px-1">
+                                <Activity className="w-4 h-4 text-zinc-400" /> 经验要求
+                            </label>
                             <input
-                                className="w-full bg-zinc-900/40 border border-white/10 rounded-2xl px-6 py-4 text-zinc-100 font-medium focus:border-emerald-500/40 focus:ring-4 focus:ring-emerald-500/5 outline-none transition-all"
+                                className="w-full bg-white/[0.04] border border-white/[0.05] rounded-[1.25rem] px-8 py-6 text-white text-xl font-semibold focus:bg-white/[0.08] focus:border-white/20 focus:ring-8 focus:ring-white/5 outline-none transition-all shadow-inner"
                                 value={editedJd.exp_level}
                                 onChange={(e) => handleChange('exp_level', e.target.value)}
                             />
                         </div>
 
-                        {/* 核心技能 - 占据整行 */}
-                        <div className="col-span-2 space-y-3">
-                            <Label icon={<Code2 className="w-4 h-4 text-purple-400" />} text="核心技能要求（全角或半角逗号分隔）" />
+                        {/* 核心技能 */}
+                        <div className="col-span-2 space-y-4">
+                            <label className="flex items-center gap-2.5 text-xs font-bold text-zinc-500 uppercase tracking-[0.2em] px-1">
+                                <Code2 className="w-4 h-4 text-zinc-400" /> 核心技能要求
+                            </label>
                             <textarea
                                 rows={2}
-                                className="w-full bg-zinc-900/40 border border-white/10 rounded-2xl px-6 py-4 text-zinc-100 leading-relaxed focus:border-purple-500/40 focus:ring-4 focus:ring-purple-500/5 outline-none transition-all resize-none"
+                                className="w-full bg-white/[0.04] border border-white/[0.05] rounded-[1.5rem] px-8 py-7 text-white text-xl leading-relaxed focus:bg-white/[0.08] focus:border-white/20 focus:ring-8 focus:ring-white/5 outline-none transition-all resize-none shadow-inner"
                                 value={editedJd.stack.join('，')}
                                 onChange={(e) =>
                                     handleChange(
@@ -96,11 +106,13 @@ export function JdReviewPanel({
                         </div>
 
                         {/* 加分项 */}
-                        <div className="col-span-2 space-y-3">
-                            <Label icon={<Target className="w-4 h-4 text-pink-400" />} text="加分项与公司亮点（全角或半角逗号分隔）" />
+                        <div className="col-span-2 space-y-4">
+                            <label className="flex items-center gap-2.5 text-xs font-bold text-zinc-500 uppercase tracking-[0.2em] px-1">
+                                <Target className="w-4 h-4 text-zinc-400" /> 加分项与公司亮点
+                            </label>
                             <textarea
                                 rows={2}
-                                className="w-full bg-zinc-900/40 border border-white/10 rounded-2xl px-6 py-4 text-zinc-100 leading-relaxed focus:border-pink-500/40 focus:ring-4 focus:ring-pink-500/5 outline-none transition-all resize-none"
+                                className="w-full bg-white/[0.04] border border-white/[0.05] rounded-[1.5rem] px-8 py-7 text-white text-xl leading-relaxed focus:bg-white/[0.08] focus:border-white/20 focus:ring-8 focus:ring-white/5 outline-none transition-all resize-none shadow-inner"
                                 value={editedJd.plus_points.join('，')}
                                 onChange={(e) =>
                                     handleChange(
@@ -115,19 +127,23 @@ export function JdReviewPanel({
                         </div>
 
                         {/* 教育与软技能 */}
-                        <div className="space-y-3">
-                            <Label icon={<ShieldCheck className="w-4 h-4 text-amber-400" />} text="最低学历" />
+                        <div className="space-y-4">
+                            <label className="flex items-center gap-2.5 text-xs font-bold text-zinc-500 uppercase tracking-[0.2em] px-1">
+                                <ShieldCheck className="w-4 h-4 text-zinc-400" /> 最低学历
+                            </label>
                             <input
-                                className="w-full bg-zinc-900/40 border border-white/10 rounded-2xl px-6 py-4 text-zinc-100 focus:border-amber-500/40 focus:ring-4 focus:ring-amber-500/5 outline-none transition-all"
+                                className="w-full bg-white/[0.04] border border-white/[0.05] rounded-[1.25rem] px-8 py-6 text-white text-xl focus:bg-white/[0.08] focus:border-white/20 focus:ring-8 focus:ring-white/5 outline-none transition-all shadow-inner"
                                 value={editedJd.education}
                                 onChange={(e) => handleChange('education', e.target.value)}
                             />
                         </div>
 
-                        <div className="space-y-3">
-                            <Label icon={<Vote className="w-4 h-4 text-rose-400" />} text="软技能要求" />
+                        <div className="space-y-4">
+                            <label className="flex items-center gap-2.5 text-xs font-bold text-zinc-500 uppercase tracking-[0.2em] px-1">
+                                <Vote className="w-4 h-4 text-zinc-400" /> 软技能与文化契合
+                            </label>
                             <input
-                                className="w-full bg-zinc-900/40 border border-white/10 rounded-2xl px-6 py-4 text-zinc-100 focus:border-rose-500/40 focus:ring-4 focus:ring-rose-500/5 outline-none transition-all"
+                                className="w-full bg-white/[0.04] border border-white/[0.05] rounded-[1.25rem] px-8 py-6 text-white text-xl focus:bg-white/[0.08] focus:border-white/20 focus:ring-8 focus:ring-white/5 outline-none transition-all shadow-inner"
                                 value={editedJd.culture_fit.join('，')}
                                 onChange={(e) =>
                                     handleChange(
@@ -142,13 +158,17 @@ export function JdReviewPanel({
                         </div>
                     </div>
 
-                    <div className="mt-12 p-6 rounded-2xl bg-blue-500/5 border border-blue-500/10 flex items-start gap-4">
-                        <div className="w-10 h-10 rounded-full bg-blue-500/10 flex items-center justify-center shrink-0">
-                            <Activity className="w-5 h-5 text-blue-400 animate-pulse" />
+                    {/* 精致提示区域 */}
+                    <div className="mt-8 p-10 rounded-[2.5rem] bg-white/[0.015] border border-white/[0.04] flex items-center gap-8 group hover:bg-white/[0.025] transition-all duration-700">
+                        <div className="w-16 h-16 rounded-[1.25rem] bg-zinc-900/40 flex items-center justify-center shrink-0 border border-white/[0.06] group-hover:scale-105 transition-transform duration-500">
+                            <Activity className="w-7 h-7 text-blue-500/60" />
                         </div>
-                        <p className="text-sm text-zinc-400 leading-relaxed">
-                            💡 <strong className="text-zinc-200">提示：</strong> 精确的职位描述有助于提高简历匹配的权重。你可以直接在上方文本框中微调关键词，系统将根据最终版本重新计算人才分值。
-                        </p>
+                        <div className="space-y-2">
+                            <p className="text-sm text-zinc-200 font-bold tracking-widest uppercase">Precision Matching</p>
+                            <p className="text-[15px] text-zinc-400 leading-relaxed max-w-2xl">
+                                系统将基于当前修正后的职位画像进行多维向量匹配。精确的描述能大幅提升 AI 对简历内容的筛选权重。
+                            </p>
+                        </div>
                     </div>
                 </div>
             </div>

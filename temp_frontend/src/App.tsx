@@ -8,6 +8,7 @@ import {
   ExecutionDashboard,
   InterviewPanel,
   LoginModal,
+  UserProfilePanel,
 } from './components';
 import type { StructuredJD } from './types';
 import { INITIAL_JD } from './types';
@@ -174,29 +175,13 @@ export default function JobOSCmdDeck() {
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-6">
-          {isLoggedIn ? (
-            <div className="flex items-center gap-3">
-              <div className="flex flex-col items-end">
-                <span className="text-xs text-zinc-500 font-mono tracking-tighter uppercase">Beta Access</span>
-                <span className="text-sm text-blue-400 font-medium">{userCode?.substring(0, 8)}...</span>
-              </div>
-              <button
-                onClick={handleLogout}
-                className="w-10 h-10 rounded-full border border-white/10 bg-zinc-900 flex items-center justify-center hover:bg-zinc-800 transition-colors group relative"
-              >
-                <div className="w-2 h-2 rounded-full bg-green-500 absolute top-0 right-0 border-2 border-black" />
-                <span className="text-zinc-500 font-bold group-hover:text-white transition-colors">OS</span>
-              </button>
-            </div>
-          ) : (
-            <button
-              onClick={() => setShowLoginModal(true)}
-              className="px-5 py-2 rounded-full border border-white/20 text-white text-sm hover:bg-white hover:text-black transition-colors font-medium"
-            >
-              登录
-            </button>
-          )}
+        <div className="flex items-center gap-6 relative">
+          <UserProfilePanel
+            isLoggedIn={isLoggedIn}
+            userCode={userCode}
+            onLogout={handleLogout}
+            onLoginClick={() => setShowLoginModal(true)}
+          />
         </div>
       </header>
 
