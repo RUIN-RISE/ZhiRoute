@@ -1,6 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { ArrowRight, Radar } from 'lucide-react';
 import { START_SUGGESTIONS } from '../types';
+
+// 打字机速度常量（毫秒）
+const TYPE_SPEED = 100;       // 每个字符的打字间隔
+const DELETE_SPEED = 50;      // 每个字符的删除间隔
+const PAUSE_AFTER_WORD = 2500; // 打完一句后的停顿
+const PAUSE_BEFORE_NEXT = 600; // 删完后开始下一句前的停顿
 
 /**
  * 首页：居中布局 + 大字体 + indigo 配色
@@ -8,57 +14,84 @@ import { START_SUGGESTIONS } from '../types';
 export function LandingPage({ onStart }: { onStart: (role: string) => void }) {
     const [input, setInput] = useState('');
     const [isFocused, setIsFocused] = useState(false);
-
-    // Typewriter effect state
     const [placeholderText, setPlaceholderText] = useState('');
-    const [placeholderIndex, setPlaceholderIndex] = useState(0);
-    const [, setCharIndex] = useState(0);
-    const [isDeleting, setIsDeleting] = useState(false);
 
-    useEffect(() => {
-        if (isFocused || input) {
+    // 用 useRef 管理打字机内部状态，避免 React 重渲染触发定时器重建
+    const typewriterRef = useRef({
+        wordIndex: 0,     // 当前轮播到第几句
+        charIndex: 0,     // 当前已打到第几个字符
+        isDeleting: false, // 当前是否处于删除阶段
+        isPaused: false,   // 是否处于停顿阶段
+    });
+
+    const rafRef = useRef<number>(0);
+    const lastTickRef = useRef<number>(0);
+
+    // 用 ref 追踪暂停状态，避免 tick 函数因依赖变化而重建
+    const isPausingRef = useRef(false);
+    isPausingRef.current = isFocused || input.length > 0;
+
+    // tick 函数无任何外部依赖 — 整个生命周期只创建一次
+    const tick = useCallback((timestamp: number) => {
+        // 首帧初始化
+        if (lastTickRef.current === 0) {
+            lastTickRef.current = timestamp;
+        }
+
+        if (isPausingRef.current) {
             setPlaceholderText('');
+            lastTickRef.current = timestamp;
+            rafRef.current = requestAnimationFrame(tick);
             return;
         }
 
-        const currentString = START_SUGGESTIONS[placeholderIndex];
-        let timeout: ReturnType<typeof setTimeout>;
+        const state = typewriterRef.current;
+        const currentString = START_SUGGESTIONS[state.wordIndex];
 
-        const type = () => {
-            setCharIndex((prevCharIndex) => {
-                if (isDeleting) {
-                    if (prevCharIndex > 0) {
-                        setPlaceholderText(currentString.substring(0, prevCharIndex - 1));
-                        timeout = setTimeout(type, 50); // 删除速度
-                        return prevCharIndex - 1;
-                    } else {
-                        setIsDeleting(false);
-                        setPlaceholderIndex((prev) => (prev + 1) % START_SUGGESTIONS.length);
-                        return 0;
-                    }
-                } else {
-                    if (prevCharIndex < currentString.length) {
-                        setPlaceholderText(currentString.substring(0, prevCharIndex + 1));
-                        timeout = setTimeout(type, 120); // 打字速度
-                        return prevCharIndex + 1;
-                    } else {
-                        // 展示完整文字后停顿 2 秒，再开始删除
-                        timeout = setTimeout(() => {
-                            setIsDeleting(true);
-                        }, 2000);
-                        return prevCharIndex;
-                    }
+        // 计算需要经过的时间间隔
+        let interval: number;
+        if (state.isPaused) {
+            interval = state.isDeleting ? PAUSE_BEFORE_NEXT : PAUSE_AFTER_WORD;
+        } else {
+            interval = state.isDeleting ? DELETE_SPEED : TYPE_SPEED;
+        }
+
+        const elapsed = timestamp - lastTickRef.current;
+
+        if (elapsed >= interval) {
+            // 只推进一步，防止累积多步
+            lastTickRef.current = timestamp;
+
+            if (state.isPaused) {
+                state.isPaused = false;
+                if (state.isDeleting) {
+                    state.isDeleting = false;
+                    state.wordIndex = (state.wordIndex + 1) % START_SUGGESTIONS.length;
                 }
-            });
-        };
+            } else if (state.isDeleting) {
+                state.charIndex = Math.max(0, state.charIndex - 1);
+                setPlaceholderText(currentString.substring(0, state.charIndex));
+                if (state.charIndex === 0) {
+                    state.isPaused = true;
+                }
+            } else {
+                state.charIndex = Math.min(currentString.length, state.charIndex + 1);
+                setPlaceholderText(currentString.substring(0, state.charIndex));
+                if (state.charIndex >= currentString.length) {
+                    state.isPaused = true;
+                    state.isDeleting = true;
+                }
+            }
+        }
 
-        // 启动打字循环（切词后停顿 500ms 再开始下一句）
-        timeout = setTimeout(type, isDeleting ? 50 : 500);
-
-        return () => clearTimeout(timeout);
-        // 只在切换焦点、输入内容或切词时重建计时器，防止 charIndex 的高频更新引发死循环重渲染
+        rafRef.current = requestAnimationFrame(tick);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [isFocused, input, placeholderIndex, isDeleting]);
+    }, []);
+
+    useEffect(() => {
+        rafRef.current = requestAnimationFrame(tick);
+        return () => cancelAnimationFrame(rafRef.current);
+    }, [tick]);
 
     return (
         <div className="flex-1 flex flex-col items-center justify-center text-center px-4 z-10 pb-20 w-full relative h-full">
