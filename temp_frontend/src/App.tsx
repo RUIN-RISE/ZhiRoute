@@ -25,7 +25,11 @@ import {
   History,
   Lock,
   Unlock,
-  Archive
+  Archive,
+  RefreshCw,
+  Trash2,
+  Copy,
+  CheckCheck
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -262,7 +266,13 @@ export default function JobOSCmdDeck() {
   const handleBack = () => {
     if (step === 'BRIEFING') setStep('IDLE');
     if (step === 'JD_REVIEW') setStep('BRIEFING');
-    if (step === 'DEPLOYED') setStep('JD_REVIEW');
+    if (step === 'DEPLOYED') {
+      // 退出 Dashboard 时重置 phase，确保下次进入时从上传简历开始
+      setDashboardPhase('INGEST');
+      setDashboardFiles([]);
+      setDashboardCandidates([]);
+      setStep('JD_REVIEW');
+    }
     if (step === 'INTERVIEW_PREP') setStep('DEPLOYED');
   };
 
@@ -365,9 +375,14 @@ export default function JobOSCmdDeck() {
                       <p className="text-xs text-zinc-500 mt-1">云端同步的最近 10 条记录</p>
                     </div>
                   </div>
-                  <button onClick={() => setIsSidebarOpen(false)} className="mx-2 p-2 hover:bg-white/5 rounded-full text-zinc-400 transition-colors">
-                    <XCircle className="w-5 h-5" />
-                  </button>
+                  <div className="flex items-center gap-1">
+                    <button onClick={loadHistory} className="p-2 hover:bg-white/5 rounded-full text-zinc-400 hover:text-zinc-200 transition-colors" title="刷新历史">
+                      <RefreshCw className="w-4 h-4" />
+                    </button>
+                    <button onClick={() => setIsSidebarOpen(false)} className="mx-2 p-2 hover:bg-white/5 rounded-full text-zinc-400 transition-colors">
+                      <XCircle className="w-5 h-5" />
+                    </button>
+                  </div>
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-4 space-y-3">
@@ -380,18 +395,26 @@ export default function JobOSCmdDeck() {
                     accountHistory.map((rec, i) => (
                       <div
                         key={i}
-                        onClick={() => handleLoadHistoryRecord(rec)}
-                        className="p-4 rounded-xl bg-white/[0.02] border border-white/5 hover:bg-white/[0.05] hover:border-indigo-500/30 transition-all cursor-pointer group relative overflow-hidden"
+                        className="p-4 rounded-xl bg-white/[0.02] border border-white/5 hover:bg-white/[0.05] hover:border-indigo-500/30 transition-all group relative overflow-hidden"
                       >
                         <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-indigo-500 to-purple-500 opacity-0 group-hover:opacity-100 transition-opacity"></div>
                         <div className="flex justify-between items-start mb-2">
                           <span className={cn("text-xs font-bold px-2 py-0.5 rounded uppercase tracking-wider", rec?.record_type === 'jd' ? "bg-indigo-500/20 text-indigo-300" : "bg-emerald-500/20 text-emerald-300")}>
                             {rec?.record_type || 'Unknown'}
                           </span>
-                          <span className="text-[10px] text-zinc-500">{rec?.timestamp ? new Date(rec.timestamp * 1000).toLocaleString() : ''}</span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] text-zinc-500">{rec?.created_at ? rec.created_at : (rec?.timestamp ? new Date(rec.timestamp * 1000).toLocaleString() : '')}</span>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); api.deleteHistory(rec.id).then(loadHistory).catch(console.error); }}
+                              className="opacity-0 group-hover:opacity-100 p-1 rounded text-red-500/70 hover:text-red-400 hover:bg-red-500/10 transition-all"
+                              title="删除此条记录"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          </div>
                         </div>
-                        <div className="text-sm text-zinc-300 font-medium line-clamp-2">
-                          {rec?.record_type === 'jd' ? (rec?.content?.role || rec?.content?.title || "未命名职位") : `Action对: ${rec?.content?.content?.substring(0, 20) || 'Action Result'}...`}
+                        <div className="text-sm text-zinc-300 font-medium line-clamp-2 cursor-pointer" onClick={() => handleLoadHistoryRecord(rec)}>
+                          {rec?.record_type === 'jd' ? (rec?.content?.role || rec?.content?.title || "未命名职位") : rec?.record_type === 'workspace' ? `工作区: ${rec?.content?.jd_data?.role || rec?.content?.jd_data?.title || '未命名'}` : `${rec?.content?.content?.substring(0, 30) || '...'}...`}
                         </div>
                       </div>
                     ))
@@ -405,7 +428,11 @@ export default function JobOSCmdDeck() {
         <AnimatePresence mode='wait'>
           {step === 'IDLE' && (
             <motion.div key="landing" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, filter: 'blur(20px)', scale: 1.05 }} transition={{ duration: 0.5 }} className="flex-1 flex flex-col">
-              <LandingPage onStart={handleStart} isLogged={isLogged} onSkipToDashboard={() => setStep('DEPLOYED')} />
+              <LandingPage onStart={handleStart} isLogged={isLogged} onSkipToDashboard={() => {
+                // 从主页直接进入简历库，重置 phase 确保展示上传界面而非上次残留的 RESULTS
+                setDashboardPhase('INGEST');
+                setStep('DEPLOYED');
+              }} />
             </motion.div>
           )}
           {step === 'BRIEFING' && (
@@ -422,6 +449,7 @@ export default function JobOSCmdDeck() {
             <motion.div key="execution" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, x: -50 }} className="flex-1 overflow-hidden">
               <ExecutionDashboard
                 onStartInterview={handleStartInterviewFlow}
+                jdData={jdData}
                 // Lifted Props
                 phase={dashboardPhase}
                 setPhase={setDashboardPhase}
@@ -503,7 +531,104 @@ function JdReviewPanel({ jd, onConfirm }: { jd: StructuredJD, onConfirm: (jd: St
             <input className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-indigo-500/50 outline-none transition-colors" value={(editedJd.culture_fit || []).join(', ')} onChange={e => handleChange('culture_fit', e.target.value.split(/[,，]/).map(s => s.trim()).filter(Boolean))} />
           </div>
         </div>
+
+        {/* Markdown 导出区域 */}
+        <JdMarkdownExport jd={editedJd} />
+
       </div>
+    </div>
+  );
+}
+
+function JdMarkdownExport({ jd }: { jd: StructuredJD }) {
+  const [loading, setLoading] = useState(false);
+  const [markdown, setMarkdown] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleGenerate = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      // 先把当前 JD 同步到后端 session
+      await api.setCurrentJd({
+        title: jd.role || '未命名职位',
+        key_responsibilities: [],
+        required_skills: jd.stack || [],
+        experience_level: jd.exp_level || '',
+        salary: { range: jd.remarks || '', tax_type: '税前', has_bonus: false, description: jd.remarks || '' },
+        work_location: '不限',
+        bonus_skills: jd.plus_points || []
+      });
+      const res = await api.generateJdMarkdown();
+      setMarkdown(res.markdown);
+    } catch (e: any) {
+      setError('生成失败，请稍后重试。');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCopy = async () => {
+    if (!markdown) return;
+    try {
+      await navigator.clipboard.writeText(markdown);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch { /* noop */ }
+  };
+
+  return (
+    <div className="mt-4 border border-white/10 rounded-2xl overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-3 bg-white/[0.03] border-b border-white/5">
+        <div className="flex items-center gap-2">
+          <FileText className="w-4 h-4 text-indigo-400" />
+          <span className="text-sm font-semibold text-zinc-300">AI 生成招聘文档</span>
+          <span className="text-xs text-zinc-600">· 可直接发布到招聘平台</span>
+        </div>
+        <div className="flex items-center gap-2">
+          {markdown && (
+            <button
+              onClick={handleCopy}
+              className={cn(
+                "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all",
+                copied ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30" : "bg-white/5 text-zinc-400 hover:bg-white/10 border border-white/10"
+              )}
+            >
+              {copied ? <><CheckCheck className="w-3.5 h-3.5" /> 已复制！</> : <><Copy className="w-3.5 h-3.5" /> 复制全文</>}
+            </button>
+          )}
+          <button
+            onClick={handleGenerate}
+            disabled={loading}
+            className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-bold bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white transition-all"
+          >
+            {loading ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> 生成中…</> : <><Zap className="w-3.5 h-3.5" /> {markdown ? '重新生成' : '生成 JD 文档'}</>}
+          </button>
+        </div>
+      </div>
+
+      {!markdown && !loading && !error && (
+        <div className="flex flex-col items-center justify-center py-10 text-zinc-600 gap-3">
+          <FileText className="w-8 h-8 opacity-30" />
+          <p className="text-sm">点击「生成 JD 文档」，AI 将根据岗位信息撰写完整的职位描述与要求</p>
+        </div>
+      )}
+
+      {loading && (
+        <div className="flex items-center justify-center py-10 gap-3 text-zinc-500">
+          <Loader2 className="w-5 h-5 animate-spin text-indigo-400" />
+          <span className="text-sm">正在调用 AI 撰写完整 JD 文档…</span>
+        </div>
+      )}
+
+      {error && !loading && (
+        <div className="p-4 text-sm text-red-400 text-center">{error}</div>
+      )}
+
+      {markdown && !loading && (
+        <pre className="text-sm text-zinc-300 font-sans leading-relaxed p-5 bg-black/20 whitespace-pre-wrap max-h-72 overflow-y-auto">{markdown}</pre>
+      )}
     </div>
   );
 }
@@ -694,7 +819,6 @@ function SpecConfigurator({ initialUserInput, onComplete }: { initialUserInput: 
       { question_id: 'exp', answer: formData.exp_level },
       { question_id: 'soft', answer: formData.culture_fit.join(',') },
       { question_id: 'edu', answer: formData.education },
-      { question_id: 'edu', answer: formData.education },
       { question_id: 'bonus', answer: formData.plus_points.join(',') },
       { question_id: 'salary', answer: formData.remarks }
     ];
@@ -816,6 +940,7 @@ function SpecConfigurator({ initialUserInput, onComplete }: { initialUserInput: 
 // --- 3. EXECUTION DASHBOARD ---
 interface DashboardProps {
   onStartInterview: (c: CandidateRank) => void;
+  jdData: StructuredJD;
   // Lifted Props
   phase: 'INGEST' | 'PROCESSING' | 'RESULTS';
   setPhase: (p: 'INGEST' | 'PROCESSING' | 'RESULTS') => void;
@@ -831,6 +956,7 @@ interface DashboardProps {
 
 function ExecutionDashboard({
   onStartInterview,
+  jdData,
   phase, setPhase,
   files: uploadedFiles, setFiles: setUploadedFiles,
   logs, setLogs,
@@ -894,6 +1020,20 @@ function ExecutionDashboard({
     try {
       setPhase('PROCESSING');
       setLogs(prev => [...prev, "[INFO] 从云端拉取简历数据..."]);
+
+      try {
+        await api.setCurrentJd({
+          title: jdData.role || "通用岗位",
+          key_responsibilities: [],
+          required_skills: jdData.stack || [],
+          experience_level: jdData.exp_level || "未指定",
+          salary: { range: "", tax_type: "税前", has_bonus: false, description: jdData.remarks || "" },
+          work_location: "不限",
+          bonus_skills: jdData.plus_points || []
+        } as any);
+      } catch (err) {
+        console.warn("Could not sync JD data to backend", err);
+      }
 
       let resultResumes = [];
       if (type === 'public') {

@@ -16,21 +16,20 @@ import json
 app = FastAPI(title="Recruitment Copilot")
 
 # --- Cloud Storage Helper ---
-def save_dict_to_cloud_bg(account_name: str, record_type: str, content_dict: dict):
+def save_dict_to_cloud_bg(account_name: str, session_id: str, record_type: str, content_dict: dict):
     from dotenv import load_dotenv
     load_dotenv(override=True)
     import os
-    # 默认指向使用 80 真实部署的 cloud_server
     cloud_api = os.getenv("CLOUD_STORAGE_API", "http://163.7.10.125:80") 
     url = f"{cloud_api}/api/cloud/save_record"
     print(f"Saving {record_type} to cloud: {url}")
     payload = {
         "account_name": account_name,
+        "session_id": session_id,
         "record_type": record_type,
         "content": content_dict
     }
     try:
-        # 使用同步请求（因为放入了 BackgroundTasks）
         import requests
         resp = requests.post(url, json=payload, timeout=5.0)
         resp.raise_for_status()
@@ -70,9 +69,20 @@ class UserState:
         self.resumes = []
         self.chat_history = []
         self.collected_info = {}
+        self.account_name = ""
+        self.session_id = ""
 
 # In-memory session store: session_id -> UserState
 SESSIONS: Dict[str, UserState] = {}
+
+def get_current_user(x_session_id: str = Header(None)) -> UserState:
+    from fastapi import HTTPException
+    if not x_session_id:
+        raise HTTPException(status_code=401, detail="未提供有效会话，请先登录")
+    user = SESSIONS.get(x_session_id)
+    if not user:
+        raise HTTPException(status_code=401, detail="登录会话已过期或失效，请重新登录")
+    return user
 
 import time
 
@@ -83,7 +93,8 @@ try:
         INVITES_MAP = json.load(f)
 except Exception as e:
     print(f"Failed to load invites: {e}")
-    INVITES_MAP = {"ADMIN-TEST-CODE": "test_admin"}
+    print("CRITICAL: invites.json not found or invalid! System started in fail-closed mode.")
+    INVITES_MAP = {}
 
 # ACTIVE_SESSIONS is now managed globally by 163 cloud server
 # We no longer need local ACTIVE_SESSIONS or HEARTBEAT_TIMEOUT
@@ -126,6 +137,9 @@ async def login(req: LoginRequest, x_session_id: str = Header(None)):
     # Ensure UserState exists
     if x_session_id not in SESSIONS:
         SESSIONS[x_session_id] = UserState()
+    
+    SESSIONS[x_session_id].account_name = account_name
+    SESSIONS[x_session_id].session_id = x_session_id
         
     return {"status": "success", "account_name": account_name}
 
@@ -154,18 +168,18 @@ async def heartbeat(x_session_id: str = Header(None), x_account_name: str = Head
     return {"status": "ok"}
 
 @app.post("/api/logout")
-async def logout(x_session_id: str = Header(None), x_account_name: str = Header(None)):
+async def logout(x_session_id: str = Header(None), user: UserState = Depends(get_current_user)):
     import os
     import httpx
     from dotenv import load_dotenv
     load_dotenv(override=True)
     cloud_api = os.getenv("CLOUD_STORAGE_API", "http://163.7.10.125:80")
     
-    if x_account_name and x_session_id:
+    if user.account_name and x_session_id:
         url = f"{cloud_api}/api/cloud/auth/logout"
         try:
             async with httpx.AsyncClient(timeout=3.0) as client:
-                await client.post(url, json={"account_name": x_account_name, "session_id": x_session_id})
+                await client.post(url, json={"account_name": user.account_name, "session_id": x_session_id})
         except Exception as e:
             print(f"Cloud logout failed: {e}")
             
@@ -174,14 +188,12 @@ async def logout(x_session_id: str = Header(None), x_account_name: str = Header(
         
     return {"status": "success"}
 
-async def get_current_user(x_session_id: str = Header(None), x_account_name: str = Header(None)) -> UserState:
+async def get_current_user(x_session_id: str = Header(None)) -> UserState:
     if not x_session_id:
-        # Fallback for dev/testing without header, or generate one
-        # Ideally, frontend MUST send it.
-        x_session_id = "default_dev_session"
+        raise HTTPException(status_code=401, detail="Missing X-Session-ID")
     
     if x_session_id not in SESSIONS:
-        SESSIONS[x_session_id] = UserState()
+        raise HTTPException(status_code=401, detail="Session expired or invalid")
     
     return SESSIONS[x_session_id]
 
@@ -231,14 +243,13 @@ class GenerateJdRequest(BaseModel):
     raw_req: str
 
 @app.post("/api/generate_jd", response_model=JobDefinition)
-async def generate_jd_endpoint(req: GenerateJdRequest, bg_tasks: BackgroundTasks, user: UserState = Depends(get_current_user), x_account_name: str = Header(None)):
+async def generate_jd_endpoint(req: GenerateJdRequest, bg_tasks: BackgroundTasks, user: UserState = Depends(get_current_user)):
     # Convert list to dict for LLM
     answers_dict = {a.question_id: a.answer for a in req.answers}
     jd = llm.generate_jd(answers_dict, req.raw_req)
     user.current_jd = jd
     
-    account_name = x_account_name if x_account_name else "default_dev_session"
-    bg_tasks.add_task(save_dict_to_cloud_bg, account_name, "jd", jd.dict())
+    bg_tasks.add_task(save_dict_to_cloud_bg, user.account_name, user.session_id, "jd", jd.dict())
     
     return jd
 
@@ -375,6 +386,8 @@ async def fetch_resumes_from_cloud(user: UserState = Depends(get_current_user)):
             response = await client.get(url)
             response.raise_for_status()
             
+            # 清理当前账号环境已缓存简历，避免多次拉取导致累加
+            user.resumes.clear()
             # 使用提取出的核心解析逻辑来处理下载到的字节流
             return await process_resume_content(response.content, "output_resume.zip", user)
     except Exception as e:
@@ -410,26 +423,30 @@ async def analyze_resumes(user: UserState = Depends(get_current_user)):
     return ranks
 
 @app.post("/api/generate_action", response_model=ActionResponse)
-async def gen_action(req: ActionRequest, bg_tasks: BackgroundTasks, x_account_name: str = Header(None)):
-    action_resp = llm.generate_action(req.candidate_name, req.action_type, req.job_title)
-    
-    account_name = x_account_name if x_account_name else "default_dev_session"
-    bg_tasks.add_task(save_dict_to_cloud_bg, account_name, "action", action_resp.dict())
-    
+async def gen_action(req: ActionRequest, user: UserState = Depends(get_current_user)):
+    # 将当前会话的 JD 上下文（含薪资等）注入生成逻辑
+    action_resp = llm.generate_action(req.candidate_name, req.action_type, req.job_title, user.current_jd)
     return action_resp
+
+@app.post("/api/generate_jd_markdown")
+async def generate_jd_markdown_api(user: UserState = Depends(get_current_user)):
+    """使用 LLM 生成可对外发布的完整 JD 文档（Markdown 格式）"""
+    if not user.current_jd:
+        raise HTTPException(status_code=400, detail="No JD in session. Please generate a JD first.")
+    md_text = llm.generate_jd_markdown(user.current_jd)
+    return {"markdown": md_text}
 
 # --- Cloud Storage Proxies ---
 @app.get("/api/account_history")
-async def get_history(record_type: str = None, x_account_name: str = Header(None)):
+async def get_history(record_type: str = None, user: UserState = Depends(get_current_user)):
     import os
     from dotenv import load_dotenv
     import httpx
     
     load_dotenv(override=True)
     cloud_api = os.getenv("CLOUD_STORAGE_API", "http://163.7.10.125:80")
-    account_name = x_account_name if x_account_name else "default_dev_session"
     
-    url = f"{cloud_api}/api/cloud/get_records/{account_name}"
+    url = f"{cloud_api}/api/cloud/get_records/{user.account_name}?session_id={user.session_id}"
     print(f"Fetching history from: {url}")
     params = {"record_type": record_type} if record_type else {}
     
@@ -442,15 +459,31 @@ async def get_history(record_type: str = None, x_account_name: str = Header(None
         print(f"Error fetching history: {e}")
         return []
 
+@app.delete("/api/delete_history/{record_id}")
+async def delete_history(record_id: int, user: UserState = Depends(get_current_user)):
+    """代理删除云端历史记录（按主键 id + 账号验权）"""
+    import os, httpx
+    from dotenv import load_dotenv
+    load_dotenv(override=True)
+    cloud_api = os.getenv("CLOUD_STORAGE_API", "http://163.7.10.125:80")
+    url = f"{cloud_api}/api/cloud/delete_record/{record_id}?account_name={user.account_name}&session_id={user.session_id}"
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(url)   # 使用 POST 兼容不支持 DELETE 方法的反代环境
+            resp.raise_for_status()
+            return {"status": "success"}
+    except Exception as e:
+        print(f"Error deleting history: {e}")
+        raise HTTPException(status_code=500, detail="Failed to delete record")
+
 @app.post("/api/upload_private_resume")
-async def upload_private(file: UploadFile = File(...), x_account_name: str = Header(None)):
+async def upload_private(file: UploadFile = File(...), user: UserState = Depends(get_current_user)):
     import os
     from dotenv import load_dotenv
     import httpx
     
     load_dotenv(override=True)
     cloud_api = os.getenv("CLOUD_STORAGE_API", "http://163.7.10.125:80")
-    account_name = x_account_name if x_account_name else "default_dev_session"
     
     url = f"{cloud_api}/api/cloud/upload_private_resume"
     print(f"Uploading private format to: {url}")
@@ -458,7 +491,7 @@ async def upload_private(file: UploadFile = File(...), x_account_name: str = Hea
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
             files = {'file': (file.filename, await file.read(), file.content_type)}
-            data = {'account_name': account_name}
+            data = {'account_name': user.account_name, 'session_id': user.session_id}
             resp = await client.post(url, data=data, files=files)
             resp.raise_for_status()
             return resp.json()
@@ -467,16 +500,15 @@ async def upload_private(file: UploadFile = File(...), x_account_name: str = Hea
         raise HTTPException(500, detail="Failed to upload to cloud")
 
 @app.post("/api/fetch_private_resumes", response_model=List[Resume])
-async def fetch_private_resumes(filename: str, user: UserState = Depends(get_current_user), x_account_name: str = Header(None)):
+async def fetch_private_resumes(filename: str, user: UserState = Depends(get_current_user)):
     import os
     from dotenv import load_dotenv
     import httpx
     
     load_dotenv(override=True)
     cloud_api = os.getenv("CLOUD_STORAGE_API", "http://163.7.10.125:80")
-    account_name = x_account_name if x_account_name else "default_dev_session"
     
-    url = f"{cloud_api}/api/cloud/download_private_resume/{account_name}/{filename}"
+    url = f"{cloud_api}/api/cloud/download_private_resume/{user.account_name}/{filename}?session_id={user.session_id}"
     print(f"Fetching private user resumes from: {url}")
     
     try:
@@ -484,6 +516,8 @@ async def fetch_private_resumes(filename: str, user: UserState = Depends(get_cur
             resp = await client.get(url)
             resp.raise_for_status()
             
+            # 清理当前账号环境已缓存简历，避免多次拉取导致累加
+            user.resumes.clear()
             # 使用现有逻辑解析拉取下来的私有专属 PDF/ZIP
             return await process_resume_content(resp.content, filename, user)
     except Exception as e:
@@ -495,14 +529,13 @@ class WorkspaceSnapshotRequest(BaseModel):
     interview_cache: dict
 
 @app.post("/api/save_workspace")
-async def save_workspace(req: WorkspaceSnapshotRequest, bg_tasks: BackgroundTasks, x_account_name: str = Header(None)):
-    account_name = x_account_name if x_account_name else "default_dev_session"
+async def save_workspace(req: WorkspaceSnapshotRequest, bg_tasks: BackgroundTasks, user: UserState = Depends(get_current_user)):
     content = {
         "jd_data": req.jd_data,
         "candidates": req.candidates,
         "interview_cache": req.interview_cache
     }
-    bg_tasks.add_task(save_dict_to_cloud_bg, account_name, "workspace", content)
+    bg_tasks.add_task(save_dict_to_cloud_bg, user.account_name, user.session_id, "workspace", content)
     return {"status": "success"}
 
 # Catch-all route for SPA (React)

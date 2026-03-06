@@ -192,6 +192,25 @@ export const api = {
 		if (!res.ok) throw new Error(`Set current JD failed: ${res.status}`);
 	},
 
+	// 删除单条历史记录
+	async deleteHistory(recordId: number): Promise<void> {
+		const res = await fetch(`${API_BASE}/delete_history/${recordId}`, {
+			method: 'DELETE',
+			headers: getHeaders()
+		});
+		if (!res.ok) throw new Error(`Delete history failed: ${res.status}`);
+	},
+
+	// 通过 LLM 生成适合对外发布的完整 JD Markdown 文档
+	async generateJdMarkdown(): Promise<{ markdown: string }> {
+		const res = await fetch(`${API_BASE}/generate_jd_markdown`, {
+			method: 'POST',
+			headers: getHeaders()
+		});
+		if (!res.ok) throw new Error(`Generate JD markdown failed: ${res.status}`);
+		return res.json();
+	},
+
 	// Upload resumes (zip/txt/pdf)
 	async uploadResumes(file: File): Promise<Resume[]> {
 		const formData = new FormData();
@@ -298,7 +317,7 @@ export const api = {
 
 	// Trigger pulling private resumes from cloud and parsing them
 	async fetchPrivateResumes(filename: string): Promise<Resume[]> {
-		const res = await fetch(`${API_BASE}/fetch_private_resumes?filename=${filename}`, {
+		const res = await fetch(`${API_BASE}/fetch_private_resumes?filename=${encodeURIComponent(filename)}`, {
 			method: 'POST',
 			headers: getHeaders()
 		});

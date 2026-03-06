@@ -570,18 +570,35 @@ def rank_candidates(jd: JobDefinition, resumes: List[Dict]) -> List[CandidateRan
         return []
 
 
-def generate_action(candidate_name: str, action_type: str, job_title: str) -> ActionResponse:
+def generate_action(candidate_name: str, action_type: str, job_title: str, current_jd=None) -> ActionResponse:
     action_desc = {
         "offer": "录用通知书 (Offer Letter)，表达公司对候选人的强烈兴趣，提及职位、薪资期望等",
         "interview": "面试邀请邮件",
         "reject": "婉拒邮件，委婉且专业地表达不予录用"
     }
     
+    # 构建 JD 上下文字符串（包含薪资、技能等）
+    jd_context = ""
+    if current_jd:
+        salary_info = "面议"
+        if hasattr(current_jd, "salary") and current_jd.salary:
+            salary_info = current_jd.salary.range or "面议"
+            if current_jd.salary.description:
+                salary_info += f"（{current_jd.salary.description}）"
+        req_skills = ", ".join(current_jd.required_skills) if hasattr(current_jd, "required_skills") and current_jd.required_skills else "详见岗位描述"
+        jd_context = f"""
+【岗位详细信息参考】
+- 薪资待遇: {salary_info}
+- 核心要求: {req_skills}
+- 经验要求: {getattr(current_jd, 'experience_level', '未指定')}
+- 工作地点: {getattr(current_jd, 'work_location', '不限')}
+"""
+    
     if action_type == "interview":
         prompt = f"""
 请为候选人 "{candidate_name}" 生成一份面试邀请邮件。
 职位：{job_title}
-
+{jd_context}
 【任务】
 1. 生成专业的面试邀请邮件正文
 2. 生成5个针对该职位的技术面试问题
@@ -602,9 +619,9 @@ def generate_action(candidate_name: str, action_type: str, job_title: str) -> Ac
         prompt = f"""
 请为候选人 "{candidate_name}" 生成一份【{action_desc.get(action_type, action_type)}】。
 职位：{job_title}
-
+{jd_context}
 【重要】你要生成的是：{action_type.upper()} 类型邮件
-- 如果是 offer：要表达录用意向，欢迎加入
+- 如果是 offer：要表达录用意向，欢迎加入。若上方有薪资和地点信息，务必在信中提及以体现诚意。
 - 如果是 reject：要委婉拒绝
 
 输出格式：
@@ -632,3 +649,48 @@ def generate_action(candidate_name: str, action_type: str, job_title: str) -> Ac
         print(f"Action Generation Error: {e}")
         # 如果 JSON 彻底损坏，把裸文本塞进 content 降级返回，这是比直接说生成失败更好的兜底
         return ActionResponse(content=conn, interview_questions=[])
+
+
+def generate_jd_markdown(jd) -> str:
+    """
+    根据 StructuredJD 数据调用 LLM，生成一份完整的、适合对外发布的职位说明书（Markdown 格式）。
+    包含职位描述（职责）与职位要求两个板块，段落有编号，风格贴近行业真实 JD。
+    """
+    salary_text = "面议"
+    if hasattr(jd, "salary") and jd.salary:
+        salary_text = jd.salary.range or "面议"
+        if jd.salary.description:
+            salary_text += f"，{jd.salary.description}"
+
+    required_skills = ", ".join(jd.required_skills) if hasattr(jd, "required_skills") and jd.required_skills else "详见岗位说明"
+    bonus_skills = ", ".join(jd.bonus_skills) if hasattr(jd, "bonus_skills") and jd.bonus_skills else ""
+    culture_fit = ", ".join(jd.culture_fit) if hasattr(jd, "culture_fit") and jd.culture_fit else ""
+
+    prompt = f"""请根据以下结构化岗位信息，生成一份正式、专业、完整的招聘 JD（Markdown 格式），适合直接发布在招聘平台。
+
+【岗位基本信息】
+- 职位名称：{getattr(jd, 'role', '') or getattr(jd, 'title', '未命名')}
+- 经验要求：{getattr(jd, 'experience_level', '') or getattr(jd, 'exp_level', '不限')}
+- 学历要求：{getattr(jd, 'education', '不限')}
+- 工作地点：{getattr(jd, 'work_location', '不限')}
+- 薪资待遇：{salary_text}
+- 核心技能要求：{required_skills}
+- 加分项：{bonus_skills or '无'}
+- 软技能/文化契合：{culture_fit or '无'}
+- 其他说明：{getattr(jd, 'remarks', '') or ''}
+
+【要求】
+1. 输出格式为标准 Markdown，可直接在招聘平台发布。
+2. 必须包含以下两个章节（使用 ## 二级标题）：
+   - ## 职位描述（4~6 条带编号的具体职责，每条至少 30 字，格式参考：1、xxx；2、xxx）
+   - ## 职位要求（4~6 条带编号的具体要求，涵盖学历/经验/技术/软技能）
+3. 在文档最顶部加上职位标题（# 一级标题）和一行简介。
+4. 行文专业、具体，避免使用模板化空话，职责和要求需要结合核心技能和业务场景展开。
+5. 如果薪资待遇合理，在文档末尾加上 **薪资待遇**：xxx 的单行说明。
+6. 只输出 Markdown 内容，不要有任何额外说明或代码块标记。"""
+
+    result = _call_llm([
+        {"role": "system", "content": "你是一位专业的人力资源文档写作专家，擅长撰写清晰、吸引人的招聘职位描述（JD）。"},
+        {"role": "user", "content": prompt}
+    ])
+    return result.strip()

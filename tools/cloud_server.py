@@ -42,6 +42,11 @@ def init_db():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
+    # 安全开起：如果表已存在且没有 session_id 列，动态加上
+    try:
+        c.execute('ALTER TABLE history_records ADD COLUMN session_id TEXT DEFAULT ""')
+    except Exception:
+        pass  # 列已存在，跳过
     conn.commit()
     conn.close()
 
@@ -58,6 +63,7 @@ class HeartbeatRequest(BaseModel):
 
 class SaveRecordRequest(BaseModel):
     account_name: str
+    session_id: str
     record_type: str
     content: dict
 
@@ -67,6 +73,15 @@ class HistoryRecord(BaseModel):
     record_type: str
     content: dict
     created_at: str
+
+# --- 鉴权工具 ---
+def validate_cloud_session(account_name: str, session_id: str):
+    if not account_name or not session_id:
+        raise HTTPException(status_code=401, detail="Missing auth parameters")
+    if account_name not in ACTIVE_SESSIONS:
+        raise HTTPException(status_code=401, detail="Account session not found or expired")
+    if ACTIVE_SESSIONS[account_name]["session_id"] != session_id:
+        raise HTTPException(status_code=403, detail="Session ID mismatch or taken by another client")
 
 # --- 路由 ---
 
@@ -107,15 +122,8 @@ async def cloud_login(req: LoginRequest):
 @app.post("/api/cloud/auth/heartbeat")
 async def cloud_heartbeat(req: HeartbeatRequest):
     import time
-    if req.account_name in ACTIVE_SESSIONS:
-        if ACTIVE_SESSIONS[req.account_name]["session_id"] == req.session_id:
-            ACTIVE_SESSIONS[req.account_name]["last_active"] = time.time()
-            return {"status": "ok"}
-        else:
-            raise HTTPException(status_code=403, detail="账号已被其他终端挤占")
-            
-    # Session expired but beating
-    ACTIVE_SESSIONS[req.account_name] = {"session_id": req.session_id, "last_active": time.time()}
+    validate_cloud_session(req.account_name, req.session_id)
+    ACTIVE_SESSIONS[req.account_name]["last_active"] = time.time()
     return {"status": "ok"}
 
 @app.post("/api/cloud/auth/logout")
@@ -128,15 +136,35 @@ async def cloud_logout(req: HeartbeatRequest):
 @app.post("/api/cloud/save_record")
 async def save_record(req: SaveRecordRequest):
     """保存生成的 JD 或信件到云端 (保留最近10条)"""
+    validate_cloud_session(req.account_name, req.session_id)
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     
-    # 存入新记录
+    # 存入/更新记录
     json_content = json.dumps(req.content, ensure_ascii=False)
-    c.execute(
-        "INSERT INTO history_records (account_name, record_type, content) VALUES (?, ?, ?)",
-        (req.account_name, req.record_type, json_content)
-    )
+    
+    # workspace / jd 类型：同一 session 内只保留最新一条（UPSERT 覆盖更新）
+    if req.record_type in ("workspace", "jd"):
+        c.execute(
+            "SELECT id FROM history_records WHERE account_name = ? AND session_id = ? AND record_type = ?",
+            (req.account_name, req.session_id, req.record_type)
+        )
+        row = c.fetchone()
+        if row:
+            c.execute(
+                "UPDATE history_records SET content = ?, created_at = CURRENT_TIMESTAMP WHERE id = ?",
+                (json_content, row[0])
+            )
+        else:
+            c.execute(
+                "INSERT INTO history_records (account_name, record_type, content, session_id) VALUES (?, ?, ?, ?)",
+                (req.account_name, req.record_type, json_content, req.session_id)
+            )
+    else:
+        c.execute(
+            "INSERT INTO history_records (account_name, record_type, content, session_id) VALUES (?, ?, ?, ?)",
+            (req.account_name, req.record_type, json_content, req.session_id)
+        )
     
     # 清理多余记录，只保留该账号该类型的最近 10 条
     c.execute('''
@@ -153,8 +181,9 @@ async def save_record(req: SaveRecordRequest):
     return {"status": "success", "message": "Record saved globally."}
 
 @app.get("/api/cloud/get_records/{account_name}", response_model=List[HistoryRecord])
-async def get_records(account_name: str, record_type: Optional[str] = None):
+async def get_records(account_name: str, session_id: str, record_type: Optional[str] = None):
     """获取某个账号的历史记录"""
+    validate_cloud_session(account_name, session_id)
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     
@@ -177,6 +206,28 @@ async def get_records(account_name: str, record_type: Optional[str] = None):
         ))
     return results
 
+@app.delete("/api/cloud/delete_record/{record_id}")
+async def delete_record(record_id: int, account_name: str, session_id: str):
+    """删除某条历史记录（需验证会话归属）"""
+    validate_cloud_session(account_name, session_id)
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("DELETE FROM history_records WHERE id = ? AND account_name = ?", (record_id, account_name))
+    conn.commit()
+    conn.close()
+    return {"status": "success", "message": "Record deleted."}
+
+@app.post("/api/cloud/delete_record/{record_id}")
+async def delete_record_post(record_id: int, account_name: str, session_id: str):
+    """POST 版本删除接口（兼容不支持 DELETE 方法的反代环境）"""
+    validate_cloud_session(account_name, session_id)
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("DELETE FROM history_records WHERE id = ? AND account_name = ?", (record_id, account_name))
+    conn.commit()
+    conn.close()
+    return {"status": "success", "message": "Record deleted."}
+
 @app.get("/api/cloud/download_public_resume")
 async def download_public_resume():
     """供拉取公有简历池使用"""
@@ -195,17 +246,23 @@ async def download_public_resume():
     raise HTTPException(404, "Public resume (output_resume.zip) not found on the cloud server.")
 
 @app.post("/api/cloud/upload_private_resume")
-async def upload_private_resume(account_name: str = Form(...), file: UploadFile = File(...)):
+async def upload_private_resume(account_name: str = Form(...), session_id: str = Form(...), file: UploadFile = File(...)):
     """上传私有简历压缩包或PDF到对应的账号隔离目录下"""
-    if not file.filename.endswith(('.zip', '.pdf')):
+    validate_cloud_session(account_name, session_id)
+    if not file.filename.lower().endswith(('.zip', '.pdf')):
         raise HTTPException(400, "Only .zip or .pdf allowed for private resumes.")
         
-    account_dir = os.path.join(UPLOAD_DIR, account_name)
+    account_dir = os.path.abspath(os.path.join(UPLOAD_DIR, account_name))
+    if not account_dir.startswith(os.path.abspath(UPLOAD_DIR)):
+        raise HTTPException(403, "Invalid account directory.")
+        
     os.makedirs(account_dir, exist_ok=True)
     
-    # 覆盖式保存，如果传新的 output_resume.zip 就覆盖旧的
-    safe_filename = file.filename.replace("..", "")
-    file_path = os.path.join(account_dir, safe_filename)
+    # 安全名称与绝对路径隔离层验证
+    safe_filename = os.path.basename(file.filename)
+    file_path = os.path.abspath(os.path.join(account_dir, safe_filename))
+    if not file_path.startswith(account_dir):
+        raise HTTPException(403, "Invalid file path.")
     
     with open(file_path, "wb") as f:
         content = await file.read()
@@ -214,11 +271,17 @@ async def upload_private_resume(account_name: str = Form(...), file: UploadFile 
     return {"status": "success", "path": f"/private/{account_name}/{safe_filename}"}
 
 @app.get("/api/cloud/download_private_resume/{account_name}/{filename}")
-async def download_private_resume(account_name: str, filename: str):
+async def download_private_resume(account_name: str, filename: str, session_id: str):
     """供 Windows/Docker 端拉取某账号的私有简历池"""
+    validate_cloud_session(account_name, session_id)
     from fastapi.responses import FileResponse
-    safe_filename = filename.replace("..", "")
-    file_path = os.path.join(UPLOAD_DIR, account_name, safe_filename)
+    
+    account_dir = os.path.abspath(os.path.join(UPLOAD_DIR, account_name))
+    safe_filename = os.path.basename(filename)
+    file_path = os.path.abspath(os.path.join(account_dir, safe_filename))
+    
+    if not file_path.startswith(account_dir):
+        raise HTTPException(403, "Invalid file path access.")
     
     if not os.path.exists(file_path):
         raise HTTPException(404, "Private resume not found for this account.")
