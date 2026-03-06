@@ -11,7 +11,7 @@ const PAUSE_BEFORE_NEXT = 600; // 删完后开始下一句前的停顿
 /**
  * 首页：居中布局 + 大字体 + indigo 配色
  */
-export function LandingPage({ onStart }: { onStart: (role: string) => void }) {
+export function LandingPage({ onStart, onOpenResumes }: { onStart: (role: string) => void, onOpenResumes: () => void }) {
     const [input, setInput] = useState('');
     const [isFocused, setIsFocused] = useState(false);
     const [placeholderText, setPlaceholderText] = useState('');
@@ -178,6 +178,16 @@ export function LandingPage({ onStart }: { onStart: (role: string) => void }) {
                         <ArrowRight className="w-4 h-4" />
                     </button>
                 </form>
+
+                {/* 直接进入简历库捷径 */}
+                <div className="flex justify-center mt-12 animate-fadeInUp delay-[600ms]">
+                    <button
+                        onClick={onOpenResumes}
+                        className="px-6 py-2.5 rounded-xl border border-white/5 bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-zinc-200 transition-all duration-300 text-sm font-medium focus:outline-none"
+                    >
+                        直接进入简历库
+                    </button>
+                </div>
             </div>
         </div>
     );

@@ -9,6 +9,7 @@ import {
   InterviewPanel,
   LoginModal,
   UserProfilePanel,
+  ResumeExplorer,
 } from './components';
 import type { StructuredJD } from './types';
 import { INITIAL_JD } from './types';
@@ -18,7 +19,7 @@ import type { CandidateRank } from './api';
  * 应用主入口：负责步骤流转与全局布局
  */
 export default function JobOSCmdDeck() {
-  const [step, setStep] = useState<'IDLE' | 'BRIEFING' | 'JD_REVIEW' | 'DEPLOYED' | 'INTERVIEW_PREP'>('IDLE');
+  const [step, setStep] = useState<'IDLE' | 'RESUME_DB' | 'BRIEFING' | 'JD_REVIEW' | 'DEPLOYED' | 'INTERVIEW_PREP'>('IDLE');
   const [jdData, setJdData] = useState<StructuredJD>(INITIAL_JD);
   const [shortlistedCandidates, setShortlistedCandidates] = useState<CandidateRank[]>([]);
 
@@ -143,6 +144,7 @@ export default function JobOSCmdDeck() {
   };
 
   const handleBack = () => {
+    if (step === 'RESUME_DB') setStep('IDLE');
     if (step === 'BRIEFING') setStep('IDLE');
     if (step === 'JD_REVIEW') setStep('BRIEFING');
     if (step === 'DEPLOYED') setStep('JD_REVIEW');
@@ -197,8 +199,11 @@ export default function JobOSCmdDeck() {
               transition={{ duration: 0.5 }}
               className="flex-1 flex flex-col"
             >
-              <LandingPage onStart={handleStart} />
+              <LandingPage onStart={handleStart} onOpenResumes={() => setStep('RESUME_DB')} />
             </motion.div>
+          )}
+          {step === 'RESUME_DB' && (
+            <ResumeExplorer key="resume_db" onBack={handleBack} />
           )}
           {step === 'BRIEFING' && (
             <motion.div
