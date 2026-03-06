@@ -10,7 +10,11 @@ import {
   LoginModal,
   UserProfilePanel,
   ResumeExplorer,
+  ResumeUpload,
+  JDHistoryLibrary,
 } from './components';
+import { CompanyProfileSetup } from './components/CompanyProfile';
+import { mockHistory } from './components/JDHistoryLibrary';
 import type { StructuredJD } from './types';
 import { INITIAL_JD } from './types';
 import type { CandidateRank } from './api';
@@ -19,7 +23,7 @@ import type { CandidateRank } from './api';
  * 应用主入口：负责步骤流转与全局布局
  */
 export default function JobOSCmdDeck() {
-  const [step, setStep] = useState<'IDLE' | 'RESUME_DB' | 'BRIEFING' | 'JD_REVIEW' | 'DEPLOYED' | 'INTERVIEW_PREP'>('IDLE');
+  const [step, setStep] = useState<'IDLE' | 'RESUME_UPLOAD' | 'RESUME_DB' | 'BRIEFING' | 'JD_REVIEW' | 'DEPLOYED' | 'INTERVIEW_PREP'>('IDLE');
   const [jdData, setJdData] = useState<StructuredJD>(INITIAL_JD);
   const [shortlistedCandidates, setShortlistedCandidates] = useState<CandidateRank[]>([]);
 
@@ -33,6 +37,11 @@ export default function JobOSCmdDeck() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [userCode, setUserCode] = useState<string | null>(null);
 
+  // 历史库状态
+  const [showHistoryLib, setShowHistoryLib] = useState(false);
+  // 公司画像引导
+  const [showCompanyProfile, setShowCompanyProfile] = useState(false);
+
   const handleLogin = async (code: string) => {
     // 模拟后端验证延迟
     await new Promise((resolve) => setTimeout(resolve, 800));
@@ -42,6 +51,10 @@ export default function JobOSCmdDeck() {
     setIsLoggedIn(true);
     setUserCode(code);
     localStorage.setItem('jobos_beta_code', code);
+    // 首次登录：若无公司画像则触发引导
+    if (!localStorage.getItem('company_profile')) {
+      setShowCompanyProfile(true);
+    }
   };
 
   const handleLogout = () => {
@@ -152,7 +165,7 @@ export default function JobOSCmdDeck() {
   };
 
   return (
-    <div className="min-h-screen bg-black text-white font-sans selection:bg-blue-500/30 selection:text-blue-200 overflow-hidden relative">
+    <div className="min-h-screen bg-black text-white selection:bg-blue-500/30 selection:text-blue-200 overflow-hidden relative">
       {/* 鼠标跟随光晕 */}
       <div className="mouse-glow" />
       {/* 自定义光标 */}
@@ -178,6 +191,19 @@ export default function JobOSCmdDeck() {
           </div>
         </div>
         <div className="flex items-center gap-6 relative">
+          {/* 顶栏独立的历史资产按钮 */}
+          {isLoggedIn && (
+            <button
+              onClick={() => setShowHistoryLib(true)}
+              className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full border border-white/10 bg-zinc-900/60 text-zinc-400 hover:text-white hover:bg-white/5 transition-all text-sm font-medium"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+              </svg>
+              资产库
+            </button>
+          )}
+
           <UserProfilePanel
             isLoggedIn={isLoggedIn}
             userCode={userCode}
@@ -199,11 +225,33 @@ export default function JobOSCmdDeck() {
               transition={{ duration: 0.5 }}
               className="flex-1 flex flex-col"
             >
-              <LandingPage onStart={handleStart} onOpenResumes={() => setStep('RESUME_DB')} />
+              <LandingPage onStart={handleStart} onOpenResumes={() => setStep('RESUME_UPLOAD')} isLoggedIn={isLoggedIn} />
+            </motion.div>
+          )}
+          {step === 'RESUME_UPLOAD' && (
+            <motion.div
+              key="resume_upload"
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="flex-1 w-full"
+            >
+              <ResumeUpload
+                onComplete={() => setStep('RESUME_DB')}
+              />
             </motion.div>
           )}
           {step === 'RESUME_DB' && (
-            <ResumeExplorer key="resume_db" onBack={handleBack} />
+            <ResumeExplorer
+              key="resume_db"
+              onBack={handleBack}
+              isLoggedIn={isLoggedIn}
+              onRequireLogin={() => setShowLoginModal(true)}
+              onStartJobFlow={(hint) => {
+                if (hint) setJdData(prev => ({ ...prev, role: hint }));
+                setStep('BRIEFING');
+              }}
+            />
           )}
           {step === 'BRIEFING' && (
             <motion.div
@@ -268,6 +316,29 @@ export default function JobOSCmdDeck() {
         onClose={() => setShowLoginModal(false)}
         onLogin={handleLogin}
       />
+
+      {/* 首次登录公司画像引导 */}
+      {showCompanyProfile && (
+        <CompanyProfileSetup
+          onComplete={() => setShowCompanyProfile(false)}
+        />
+      )}
+
+      <AnimatePresence>
+        {showHistoryLib && (
+          <JDHistoryLibrary
+            onClose={() => setShowHistoryLib(false)}
+            onSelectJD={(jdId) => {
+              console.log('Selected history JD:', jdId);
+              setShowHistoryLib(false);
+              const historyTarget = mockHistory.find(h => h.id === jdId);
+              const roleName = historyTarget ? historyTarget.roleName : '未知项目';
+              setJdData({ ...INITIAL_JD, role: `恢复项目归档：${roleName}` });
+              setStep('JD_REVIEW');
+            }}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

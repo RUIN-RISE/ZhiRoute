@@ -1,29 +1,31 @@
-from openai import OpenAI
+from dotenv import load_dotenv
 import os
 import re
-from typing import List, Dict
 import json
-from .models import ClarificationQuestion, ClarificationResponse, JobDefinition, CandidateRank, Evidence, ActionResponse, ChatMessage, ChatResponse
+from typing import List, Dict
+from openai import OpenAI
+from .models import (
+    ClarificationQuestion, ClarificationResponse, JobDefinition, 
+    CandidateRank, Evidence, ActionResponse, ChatMessage, ChatResponse
+)
 
-# Multi-model configuration with automatic fallback
-# Multi-model configuration with automatic fallback
-# API Key should be set in environment variables
-API_KEY = os.environ.get("MS_API_KEY") 
+# Load environment variables from .env file
+load_dotenv()
+
+# 魔搦（ModelScope）API 配置
+API_KEY = os.environ.get("MS_API_KEY")
 if not API_KEY:
     print("Warning: MS_API_KEY not found in environment variables.")
-    # Fallback/Placeholder if needed, or keep empty to fail fast
-    # API_KEY = "ms-..." 
 
 BASE_URL = "https://api-inference.modelscope.cn/v1"
 
-# Available models in order of preference (GLM first)
+# 可用模型列表（自动 fallback）
 MODEL_CONFIGS = [
-    {"id": "ZhipuAI/GLM-4.7", "name": "GLM-4.7"},
+    {"id": "ZhipuAI/GLM-Z1-Flash", "name": "GLM-Z1-Flash"},
+    {"id": "ZhipuAI/GLM-4.7-Flash", "name": "GLM-4.7-Flash"},
     {"id": "deepseek-ai/DeepSeek-V3.2", "name": "DeepSeek-V3.2"},
-    {"id": "Qwen/Qwen3-235B-A22B-Instruct-2507", "name": "Qwen3"},
 ]
 
-# Track current model index (starts with first = MiniMax)
 current_model_idx = 0
 
 client = OpenAI(

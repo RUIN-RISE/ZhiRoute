@@ -63,7 +63,7 @@ export function InterviewPanel({ candidates }: { candidates: CandidateRank[] }) 
                             {selectedCandidate?.resume_id === c.resume_id && (
                                 <div className="absolute top-0 right-0 w-12 h-12 bg-blue-500/10 blur-xl rounded-full translate-x-4 -translate-y-4" />
                             )}
-                            <div className="font-display font-bold text-lg mb-1 tracking-tight">{c.name}</div>
+                            <div className="font-bold text-lg mb-1 tracking-tight">{c.name}</div>
                             <div className={cn(
                                 "text-[10px] uppercase tracking-widest font-bold",
                                 selectedCandidate?.resume_id === c.resume_id ? "text-blue-400" : "text-zinc-600"
@@ -164,7 +164,7 @@ export function InterviewPanel({ candidates }: { candidates: CandidateRank[] }) 
                                     <h4 className="text-blue-400 text-[10px] font-black uppercase tracking-[0.3em] mb-6 flex items-center gap-3">
                                         <Mail className="w-4 h-4 opacity-70" /> {actionType === 'interview' ? '面试邀请' : actionType === 'offer' ? '入职通知' : '婉拒信'}草稿
                                     </h4>
-                                    <div className="whitespace-pre-wrap leading-[1.8] text-zinc-200 font-sans text-[17px] font-medium opacity-90">
+                                    <div className="whitespace-pre-wrap leading-[1.8] text-zinc-200 text-[17px] font-medium opacity-90">
                                         {generatedContent.content}
                                     </div>
                                     <div className="mt-10 flex gap-4">

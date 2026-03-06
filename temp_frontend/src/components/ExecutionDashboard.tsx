@@ -3,7 +3,6 @@ import {
     UploadCloud,
     XCircle,
     Cpu,
-    CheckCircle2,
     Activity,
     FileText,
     Terminal,
@@ -384,11 +383,20 @@ export function ExecutionDashboard({
                                     >
                                         <div className="flex gap-14 items-stretch">
                                             <div className="w-36 shrink-0 flex flex-col items-center justify-center border-r border-white/5 pr-14">
-                                                <div className="text-[4.5rem] font-bold text-white tracking-tighter leading-none mb-4 tabular-nums">
+                                                <div className="text-[4.5rem] font-bold text-white tracking-tighter leading-none mb-1 tabular-nums">
                                                     {c.score}
                                                 </div>
-                                                <div className="text-[10px] text-zinc-500 font-bold uppercase tracking-[0.2em] whitespace-nowrap opacity-60">
+                                                <div className="text-[10px] text-zinc-500 font-bold uppercase tracking-[0.2em] whitespace-nowrap opacity-60 mb-2">
                                                     拟合系数
+                                                </div>
+                                                {/* 可信度凭证角标 */}
+                                                <div className="flex items-center gap-1 bg-emerald-500/10 border border-emerald-500/20 rounded-full px-2.5 py-1 group/badge cursor-default relative">
+                                                    <ShieldCheck className="w-3 h-3 text-emerald-400 shrink-0" />
+                                                    <span className="text-[9px] text-emerald-400 font-bold tracking-wider uppercase">凭证已验证</span>
+                                                    {/* 悬停提示 */}
+                                                    <div className="absolute -top-10 left-1/2 -translate-x-1/2 w-48 bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2 text-[10px] text-zinc-300 leading-relaxed opacity-0 group-hover/badge:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-20">
+                                                        此分数来自简历原文自动提取，非配额评分
+                                                    </div>
                                                 </div>
                                             </div>
 
@@ -418,15 +426,28 @@ export function ExecutionDashboard({
                                                     </p>
                                                 </div>
 
+                                                {/* 证据链预览条（折叠态） */}
                                                 {!isExpanded && c.top_evidence[0] && (
-                                                    <div className="flex items-center gap-4 text-[11px] font-medium text-zinc-500 font-sans">
-                                                        <div className="flex items-center gap-2 text-emerald-500/80 font-bold uppercase tracking-wider bg-emerald-500/5 px-2.5 py-1 rounded-md border border-emerald-500/10">
-                                                            <CheckCircle2 className="w-3.5 h-3.5" />
-                                                            核心匹配
+                                                    <div
+                                                        className="mt-2 rounded-2xl border border-emerald-500/25 bg-emerald-500/[0.04] hover:bg-emerald-500/[0.08] hover:border-emerald-500/40 transition-all duration-300 p-4 cursor-pointer"
+                                                        onClick={(e) => { e.stopPropagation(); setExpandedId(c.resume_id); }}
+                                                    >
+                                                        <div className="flex items-center justify-between mb-2">
+                                                            <div className="flex items-center gap-2">
+                                                                <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full shadow-[0_0_6px_rgba(52,211,153,0.8)] animate-pulse" />
+                                                                <span className="text-[10px] text-emerald-400 font-bold uppercase tracking-widest">证据链 · 核心区分点</span>
+                                                            </div>
+                                                            <span className="text-[10px] text-emerald-500/60 font-medium flex items-center gap-1">
+                                                                展开查看完整证据链
+                                                                <ChevronDown className="w-3 h-3" />
+                                                            </span>
                                                         </div>
-                                                        <span className="italic opacity-60 truncate max-w-[500px]">
-                                                            &quot;{c.top_evidence[0].quote}&quot;
-                                                        </span>
+                                                        <p className="text-[13px] text-emerald-100/80 leading-relaxed italic">
+                                                            &ldquo;{c.top_evidence[0].quote}&rdquo;
+                                                        </p>
+                                                        <p className="text-[10px] text-emerald-500/50 mt-1.5 font-mono">
+                                                            匹配维度: {c.top_evidence[0].criteria}
+                                                        </p>
                                                     </div>
                                                 )}
                                             </div>

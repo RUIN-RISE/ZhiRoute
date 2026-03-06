@@ -1,5 +1,5 @@
 ﻿import { useState } from 'react';
-import { FileText, User, Activity, Code2, Target, ShieldCheck, Vote, ArrowRight } from 'lucide-react';
+import { FileText, User, Activity, Code2, Target, ShieldCheck, Vote, ArrowRight, Download } from 'lucide-react';
 import { MagneticButton } from './shared';
 import type { StructuredJD } from '../types';
 
@@ -17,6 +17,32 @@ export function JdReviewPanel({
 
     const handleChange = (field: keyof StructuredJD, value: any) => {
         setEditedJd((prev) => ({ ...prev, [field]: value }));
+    };
+
+    const handleExport = () => {
+        const lines = [
+            `# 职位描述：${editedJd.role}`,
+            ``,
+            `## 基本要求`,
+            `- 经验要求：${editedJd.exp_level}`,
+            `- 最低学历：${editedJd.education}`,
+            ``,
+            `## 核心技能要求`,
+            editedJd.stack.map(s => `- ${s}`).join('\n'),
+            ``,
+            `## 加分项与公司亮点`,
+            editedJd.plus_points.map(p => `- ${p}`).join('\n'),
+            ``,
+            `## 软技能与文化契合`,
+            editedJd.culture_fit.map(c => `- ${c}`).join('\n'),
+        ].join('\n');
+        const blob = new Blob([lines], { type: 'text/markdown;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${editedJd.role || 'JD'}_职位描述.md`;
+        a.click();
+        URL.revokeObjectURL(url);
     };
 
     return (
@@ -49,12 +75,21 @@ export function JdReviewPanel({
                             </p>
                         </div>
                     </div>
-                    <MagneticButton
-                        onClick={() => onConfirm(editedJd)}
-                        className="bg-white text-black px-14 py-4.5 rounded-[1rem] font-bold text-lg flex items-center gap-3 hover:bg-[#f5f5f7] transition-all hover:shadow-[0_24px_48px_rgba(255,255,255,0.15)] active:scale-95 group"
-                    >
-                        确认并继续 <ArrowRight className="w-6 h-6 group-hover:translate-x-1.5 transition-transform duration-300" />
-                    </MagneticButton>
+                    <div className="flex items-center gap-3">
+                        <button
+                            onClick={handleExport}
+                            className="flex items-center gap-2.5 px-8 py-4 rounded-[1rem] font-semibold text-base bg-white/5 border border-white/10 text-zinc-300 hover:bg-white/10 hover:text-white transition-all active:scale-95"
+                        >
+                            <Download className="w-5 h-5" />
+                            导出 JD
+                        </button>
+                        <MagneticButton
+                            onClick={() => onConfirm(editedJd)}
+                            className="bg-white text-black px-14 py-4.5 rounded-[1rem] font-bold text-lg flex items-center gap-3 hover:bg-[#f5f5f7] transition-all hover:shadow-[0_24px_48px_rgba(255,255,255,0.15)] active:scale-95 group"
+                        >
+                            确认并继续 <ArrowRight className="w-6 h-6 group-hover:translate-x-1.5 transition-transform duration-300" />
+                        </MagneticButton>
+                    </div>
                 </div>
 
                 {/* 主体编辑区域 */}

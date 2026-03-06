@@ -11,7 +11,11 @@ const PAUSE_BEFORE_NEXT = 600; // 删完后开始下一句前的停顿
 /**
  * 首页：居中布局 + 大字体 + indigo 配色
  */
-export function LandingPage({ onStart, onOpenResumes }: { onStart: (role: string) => void, onOpenResumes: () => void }) {
+export function LandingPage({ onStart, onOpenResumes, isLoggedIn }: {
+    onStart: (role: string) => void;
+    onOpenResumes: () => void;
+    isLoggedIn?: boolean;
+}) {
     const [input, setInput] = useState('');
     const [isFocused, setIsFocused] = useState(false);
     const [placeholderText, setPlaceholderText] = useState('');
@@ -179,15 +183,18 @@ export function LandingPage({ onStart, onOpenResumes }: { onStart: (role: string
                     </button>
                 </form>
 
-                {/* 直接进入简历库捷径 */}
-                <div className="flex justify-center mt-12 animate-fadeInUp delay-[600ms]">
-                    <button
-                        onClick={onOpenResumes}
-                        className="px-6 py-2.5 rounded-xl border border-white/5 bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-zinc-200 transition-all duration-300 text-sm font-medium focus:outline-none"
-                    >
-                        直接进入简历库
-                    </button>
-                </div>
+                {/* 登录后才显示：查看招聘历史 / 人才库入口 */}
+                {isLoggedIn && (
+                    <div className="flex justify-center mt-12 animate-fadeInUp delay-[600ms]">
+                        <button
+                            onClick={onOpenResumes}
+                            className="px-6 py-2.5 rounded-xl border border-white/8 bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-zinc-200 transition-all duration-300 text-sm font-medium focus:outline-none flex items-center gap-2"
+                        >
+                            <svg className="w-3.5 h-3.5 opacity-60" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
+                            查看我的招聘历史与人才库
+                        </button>
+                    </div>
+                )}
             </div>
         </div>
     );

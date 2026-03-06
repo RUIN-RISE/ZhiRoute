@@ -6,3 +6,5 @@ export { InterviewPanel } from './InterviewPanel';
 export { LoginModal } from './LoginModal';
 export { UserProfilePanel, pushTimelineRecord } from './UserProfilePanel';
 export { ResumeExplorer } from './ResumeExplorer';
+export { ResumeUpload } from './ResumeUpload';
+export { JDHistoryLibrary } from './JDHistoryLibrary';
