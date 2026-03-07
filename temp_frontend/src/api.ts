@@ -196,6 +196,17 @@ export const api = {
 		return res.json();
 	},
 
+	// Parse Raw JD text directly
+	async parseJd(text: string): Promise<JobDefinition> {
+		const res = await fetch(`${API_BASE}/parse_jd`, {
+			method: 'POST',
+			headers: getHeaders(),
+			body: JSON.stringify({ text })
+		});
+		if (!res.ok) await handleResError(res, '解析导入简历 (JD) 失败');
+		return res.json();
+	},
+
 	// Push JD context directly to Session (for History Restoration)
 	async setCurrentJd(jd: JobDefinition): Promise<void> {
 		const res = await fetch(`${API_BASE}/set_current_jd`, {

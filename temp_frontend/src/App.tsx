@@ -30,7 +30,8 @@ import {
   Trash2,
   Copy,
   CheckCheck,
-  Check
+  Check,
+  CheckCircle
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -315,6 +316,8 @@ export default function JobOSCmdDeck() {
                 dispatch({ type: 'SET_DASHBOARD_PHASE', phase: 'INGEST' });
                 dispatch({ type: 'SET_JD_DATA', jd: INITIAL_JD }); // or keep current
                 dispatch({ type: 'CONFIRM_JD', jd: jdData }); // essentially SET_STEP to DEPLOYED
+              }} onImportJd={(jd) => {
+                dispatch({ type: 'FINISH_BRIEFING', jd });
               }} />
             </motion.div>
           )}
@@ -522,9 +525,28 @@ function JdMarkdownExport({ jd }: { jd: JobDefinition }) {
 
 
 // --- 1. LANDING PAGE ---
-function LandingPage({ onStart, isLogged, onSkipToDashboard }: { onStart: (role: string) => void, isLogged?: boolean, onSkipToDashboard?: () => void }) {
+function LandingPage({ onStart, isLogged, onSkipToDashboard, onImportJd }: { onStart: (role: string) => void, isLogged?: boolean, onSkipToDashboard?: () => void, onImportJd?: (jd: JobDefinition) => void }) {
   const [input, setInput] = useState('');
   const [suggestionIdx, setSuggestionIdx] = useState(0);
+
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importText, setImportText] = useState('');
+  const [isImporting, setIsImporting] = useState(false);
+
+  const handleImportSubmit = async () => {
+    if (!importText.trim() || isImporting || !onImportJd) return;
+    setIsImporting(true);
+    try {
+      const jd = await api.parseJd(importText);
+      onImportJd(jd);
+    } catch (e: any) {
+      alert("解析失败: " + e.message);
+    } finally {
+      setIsImporting(false);
+      setShowImportModal(false);
+      setImportText('');
+    }
+  };
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -578,15 +600,50 @@ function LandingPage({ onStart, isLogged, onSkipToDashboard }: { onStart: (role:
           </div>
         </form>
 
-        {/* Secondary Action: Skip to Dashboard */}
-        {isLogged && (
-          <div className="mt-8 flex justify-center">
-            <button type="button" onClick={onSkipToDashboard} className="px-10 py-4 rounded-xl border border-indigo-500/30 text-indigo-300 bg-black/40 hover:bg-indigo-500/10 transition-all text-sm font-bold flex items-center justify-center whitespace-nowrap backdrop-blur-md hover:shadow-[0_0_20px_rgba(99,102,241,0.2)]">
+        {/* Secondary Action: Skip to Dashboard and Import */}
+        <div className="mt-8 flex justify-center gap-4 flex-wrap">
+          <button type="button" onClick={() => setShowImportModal(true)} className="px-8 py-3 rounded-xl border border-white/10 text-zinc-400 bg-white/5 hover:bg-white/10 transition-all text-sm font-bold flex items-center justify-center whitespace-nowrap backdrop-blur-md">
+            导入外部 JD (跳过对话)
+          </button>
+
+          {isLogged && (
+            <button type="button" onClick={onSkipToDashboard} className="px-8 py-3 rounded-xl border border-indigo-500/30 text-indigo-300 bg-black/40 hover:bg-indigo-500/10 transition-all text-sm font-bold flex items-center justify-center whitespace-nowrap backdrop-blur-md hover:shadow-[0_0_20px_rgba(99,102,241,0.2)]">
               直接进入简历库
             </button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
+
+      {/* Import Modal */}
+      <AnimatePresence>
+        {showImportModal && (
+          <>
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => !isImporting && setShowImportModal(false)} className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center overflow-y-auto" />
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-2xl bg-[#0A0A0B] border border-white/10 shadow-2xl rounded-3xl p-8 z-50 overflow-hidden">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 rounded-xl bg-indigo-500/20 flex items-center justify-center text-indigo-400"><FileText className="w-5 h-5" /></div>
+                  <h3 className="text-xl font-bold tracking-tight text-white">直接导入 JD 文本</h3>
+                </div>
+                <button onClick={() => !isImporting && setShowImportModal(false)} className="text-zinc-500 hover:text-white"><XCircle className="w-6 h-6" /></button>
+              </div>
+              <textarea
+                value={importText}
+                onChange={e => setImportText(e.target.value)}
+                placeholder="请将完整的招聘需求贴在此处，AI将自动提取关键信息并构造数字画像..."
+                className="w-full h-64 bg-white/5 border border-white/10 rounded-xl p-4 text-sm text-zinc-300 focus:outline-none focus:border-indigo-500/50 resize-none"
+                disabled={isImporting}
+              />
+              <div className="mt-6 flex justify-end">
+                <MagneticButton disabled={isImporting || !importText.trim()} onClick={handleImportSubmit} className="bg-indigo-600 text-white px-8 py-3 rounded-xl font-bold flex items-center gap-2 hover:bg-indigo-500 disabled:opacity-50 transition-colors">
+                  {isImporting ? <><Loader2 className="w-4 h-4 animate-spin" /> 解析提取中...</> : <><CheckCircle className="w-4 h-4" /> 确认导入</>}
+                </MagneticButton>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
     </div>
   );
 }
@@ -602,7 +659,6 @@ function SpecConfigurator({ initialUserInput, onComplete }: { initialUserInput: 
   const [chatInput, setChatInput] = useState('');
   const [isAiThinking, setIsAiThinking] = useState(false);
   const [apiHistory, setApiHistory] = useState<ChatMessage[]>([]);
-  const [isComplete, setIsComplete] = useState(false);
   const [quickReplies, setQuickReplies] = useState<string[]>([]);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
@@ -630,9 +686,6 @@ function SpecConfigurator({ initialUserInput, onComplete }: { initialUserInput: 
 
         if (res.collected_info) {
           updateFormData(res.collected_info);
-        }
-        if (res.is_complete) {
-          setIsComplete(true);
         }
       }).catch(err => {
         console.error("Chat init error", err);
@@ -687,7 +740,6 @@ function SpecConfigurator({ initialUserInput, onComplete }: { initialUserInput: 
 
       if (res.quick_replies) setQuickReplies(res.quick_replies);
       if (res.collected_info) updateFormData(res.collected_info);
-      if (res.is_complete) setIsComplete(true);
 
     } catch (err) {
       console.error(err);
@@ -816,11 +868,11 @@ function SpecConfigurator({ initialUserInput, onComplete }: { initialUserInput: 
 
         <div className="px-10 py-8 border-t border-white/5 bg-black/40 flex justify-between items-center">
           <div className="flex items-center gap-3 text-xs text-zinc-500 font-mono tracking-wider"><div className="w-2.5 h-2.5 rounded-full bg-indigo-500 animate-ping"></div>AGENTS STANDBY</div>
-          {isComplete && (
-            <MagneticButton onClick={handleGenerate} disabled={isAiThinking} className="group bg-white text-black px-10 py-4 rounded-xl font-bold text-base hover:bg-zinc-200 transition-all flex items-center gap-3 shadow-[0_0_40px_rgba(255,255,255,0.15)] active:scale-95">
-              {isAiThinking ? <Loader2 className="w-5 h-5 animate-spin" /> : <>启动筛选引擎<ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" /></>}
-            </MagneticButton>
-          )}
+
+          <MagneticButton onClick={handleGenerate} disabled={isAiThinking} className="group bg-white text-black px-10 py-4 rounded-xl font-bold text-base hover:bg-zinc-200 transition-all flex items-center gap-3 shadow-[0_0_40px_rgba(255,255,255,0.15)] active:scale-95">
+            {isAiThinking ? <Loader2 className="w-5 h-5 animate-spin" /> : <>启动筛选引擎<ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" /></>}
+          </MagneticButton>
+
         </div>
       </div>
     </div>

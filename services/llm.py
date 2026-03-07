@@ -416,6 +416,47 @@ def generate_jd(answers: Dict[str, str], raw_req: str = "") -> JobDefinition:
         return JobDefinition(title="生成失败", key_responsibilities=[], required_skills=[], experience_level="", education="未指定", bonus_skills=[], culture_fit=[])
 
 
+def parse_raw_jd(text: str) -> JobDefinition:
+    prompt = f"""
+    请从以下非结构的文本中提取分析招聘信息，并严格按照 JSON 格式输出结构化的职位描述 (JD)。
+    如果文中缺乏某些信息（例如学历、经验等），请尽力推测或填写为"未指定"或"不限"。
+    
+    待解析文本：
+    \"\"\"{text}\"\"\"
+
+    特别重要：
+    1. 提取"薪资"信息到 `salary` 对象。
+    2. "工作地点" (`work_location`) 如果文中没有绝对倾向，默认填 "杭州"。
+    3. 严格区分 "加分项" (`bonus_skills`) 和 "软技能/团队文化" (`culture_fit`)。
+    
+    输出格式示例：
+    {{
+        "title": "高级产品经理",
+        "key_responsibilities": ["负责规划产品路线", "撰写PRD文档"],
+        "required_skills": ["Axure", "数据分析", "项目管理"],
+        "experience_level": "3-5年",
+        "education": "本科",
+        "salary": {{
+            "range": "20k-30k",
+            "tax_type": "税前",
+            "has_bonus": true,
+            "description": "14薪"
+        }},
+        "work_location": "上海",
+        "bonus_skills": ["B端SaaS经验", "带团队经验"],
+        "culture_fit": ["沟通能力强", "抗压能力好"]
+    }}
+    """
+    conn = _call_llm([
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "user", "content": prompt}
+    ])
+    try:
+        data = json.loads(conn)
+        return JobDefinition(**data)
+    except:
+        return JobDefinition(title="生成失败", key_responsibilities=[], required_skills=[], experience_level="", education="未指定", bonus_skills=[], culture_fit=[])
+
 def _parse_resume_fields(content: str) -> Dict:
     """Extract structured fields from resume content"""
     fields = {"exp_years": 0, "education": "", "hard_skills": []}

@@ -252,6 +252,19 @@ async def generate_jd_endpoint(req: GenerateJdRequest, bg_tasks: BackgroundTasks
     
     return jd
 
+class ParseJdRequest(BaseModel):
+    text: str
+
+@app.post("/api/parse_jd", response_model=JobDefinition)
+async def parse_jd_endpoint(req: ParseJdRequest, bg_tasks: BackgroundTasks, user: UserState = Depends(get_current_user)):
+    jd = llm.parse_raw_jd(req.text)
+    user.current_jd = jd
+    
+    if getattr(user, "account_name", "") != "guest":
+        bg_tasks.add_task(save_dict_to_cloud_bg, user.account_name, user.session_id, "jd", jd.dict())
+        
+    return jd
+
 @app.post("/api/clear_resumes")
 async def clear_resumes_endpoint(user: UserState = Depends(get_current_user)):
     user.resumes.clear()
