@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Terminal,
   UploadCloud,
@@ -615,34 +616,37 @@ function LandingPage({ onStart, isLogged, onSkipToDashboard, onImportJd }: { onS
       </div>
 
       {/* Import Modal */}
-      <AnimatePresence>
-        {showImportModal && (
-          <>
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => !isImporting && setShowImportModal(false)} className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center overflow-y-auto" />
-            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-2xl bg-[#0A0A0B] border border-white/10 shadow-2xl rounded-3xl p-8 z-50 overflow-hidden">
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 rounded-xl bg-indigo-500/20 flex items-center justify-center text-indigo-400"><FileText className="w-5 h-5" /></div>
-                  <h3 className="text-xl font-bold tracking-tight text-white">直接导入 JD 文本</h3>
+      {typeof document !== 'undefined' && createPortal(
+        <AnimatePresence>
+          {showImportModal && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center pointer-events-none p-4">
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => !isImporting && setShowImportModal(false)} className="absolute inset-0 bg-black/80 backdrop-blur-sm pointer-events-auto cursor-pointer" />
+              <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="relative w-full max-w-2xl bg-[#0A0A0B] border border-white/10 shadow-2xl rounded-3xl p-8 overflow-hidden pointer-events-auto flex flex-col max-h-[90vh]">
+                <div className="flex items-center justify-between mb-6 shrink-0">
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 rounded-xl bg-indigo-500/20 flex items-center justify-center text-indigo-400"><FileText className="w-5 h-5" /></div>
+                    <h3 className="text-xl font-bold tracking-tight text-white">直接导入 JD 文本</h3>
+                  </div>
+                  <button onClick={() => !isImporting && setShowImportModal(false)} className="text-zinc-500 hover:text-white transition-colors"><XCircle className="w-6 h-6" /></button>
                 </div>
-                <button onClick={() => !isImporting && setShowImportModal(false)} className="text-zinc-500 hover:text-white"><XCircle className="w-6 h-6" /></button>
-              </div>
-              <textarea
-                value={importText}
-                onChange={e => setImportText(e.target.value)}
-                placeholder="请将完整的招聘需求贴在此处，AI将自动提取关键信息并构造数字画像..."
-                className="w-full h-64 bg-white/5 border border-white/10 rounded-xl p-4 text-sm text-zinc-300 focus:outline-none focus:border-indigo-500/50 resize-none"
-                disabled={isImporting}
-              />
-              <div className="mt-6 flex justify-end">
-                <MagneticButton disabled={isImporting || !importText.trim()} onClick={handleImportSubmit} className="bg-indigo-600 text-white px-8 py-3 rounded-xl font-bold flex items-center gap-2 hover:bg-indigo-500 disabled:opacity-50 transition-colors">
-                  {isImporting ? <><Loader2 className="w-4 h-4 animate-spin" /> 解析提取中...</> : <><CheckCircle className="w-4 h-4" /> 确认导入</>}
-                </MagneticButton>
-              </div>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
+                <textarea
+                  value={importText}
+                  onChange={e => setImportText(e.target.value)}
+                  placeholder="请将完整的招聘需求贴在此处，AI将自动提取关键信息并构造数字画像..."
+                  className="w-full flex-1 min-h-[16rem] bg-white/5 border border-white/10 rounded-xl p-4 text-sm text-zinc-300 focus:outline-none focus:border-indigo-500/50 resize-none"
+                  disabled={isImporting}
+                />
+                <div className="mt-6 flex justify-end shrink-0">
+                  <MagneticButton disabled={isImporting || !importText.trim()} onClick={handleImportSubmit} className="bg-indigo-600 text-white px-8 py-3 rounded-xl font-bold flex items-center gap-2 hover:bg-indigo-500 disabled:opacity-50 transition-colors">
+                    {isImporting ? <><Loader2 className="w-4 h-4 animate-spin" /> 解析提取中...</> : <><CheckCircle className="w-4 h-4" /> 确认导入</>}
+                  </MagneticButton>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
 
     </div>
   );
