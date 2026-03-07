@@ -580,13 +580,15 @@ class WorkspaceSnapshotRequest(BaseModel):
     jd_data: dict
     candidates: list
     interview_cache: dict
+    processed_count: int = 0
 
 @app.post("/api/save_workspace")
 async def save_workspace(req: WorkspaceSnapshotRequest, bg_tasks: BackgroundTasks, user: UserState = Depends(get_current_user)):
     content = {
         "jd_data": req.jd_data,
         "candidates": req.candidates,
-        "interview_cache": req.interview_cache
+        "interview_cache": req.interview_cache,
+        "processed_count": req.processed_count
     }
     bg_tasks.add_task(save_dict_to_cloud_bg, user.account_name, user.session_id, "workspace", content)
     return {"status": "success"}

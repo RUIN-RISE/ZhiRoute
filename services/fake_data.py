@@ -56,7 +56,7 @@ def generate_fake_resumes(count: int = 5, role_hint: str = "python") -> List[Res
 - 维护现有代码库
 
 教育背景:
-{fake.university_name()} - 计算机科学与技术 - 本科
+{random.choice(['清华大学', '北京大学', '浙江大学', '上海交通大学', '复旦大学', '南京大学', '武汉大学', '中山大学'])} - 计算机科学与技术 - 本科
         """
         
         resumes.append(Resume(

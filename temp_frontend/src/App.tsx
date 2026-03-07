@@ -39,6 +39,8 @@ import logoW from './assets/logo_w.png';
 // --- API CLIENT ---
 import api from './api';
 import type { ChatMessage, CandidateRank, JobDefinition } from './api';
+import { useFlowReducer, INITIAL_JD } from './store/flowReducer';
+import { useWorkspace } from './hooks/useWorkspace';
 
 // --- UTILS ---
 function cn(...inputs: ClassValue[]) {
@@ -46,19 +48,6 @@ function cn(...inputs: ClassValue[]) {
 }
 
 // --- TYPES ---
-
-
-const INITIAL_JD: JobDefinition = {
-  title: "",
-  key_responsibilities: [],
-  required_skills: [],
-  experience_level: "未指定",
-  education: "未指定",
-  bonus_skills: [],
-  culture_fit: [],
-  work_location: "杭州",
-  salary: { range: "面议", tax_type: "税前", has_bonus: false, description: "" }
-};
 
 const START_SUGGESTIONS = [
   "寻找一位拥有5年经验的 React 架构师...",
@@ -68,103 +57,22 @@ const START_SUGGESTIONS = [
 
 // --- APP COMPONENT ---
 export default function JobOSCmdDeck() {
-  const [step, setStep] = useState<'IDLE' | 'BRIEFING' | 'JD_REVIEW' | 'DEPLOYED' | 'INTERVIEW_PREP'>('IDLE');
-  const [jdData, setJdData] = useState<JobDefinition>(INITIAL_JD);
-  const [shortlistedCandidates, setShortlistedCandidates] = useState<CandidateRank[]>([]);
+  const [state, dispatch] = useFlowReducer();
+  const { step, jdData, shortlistedCandidates, dashboardPhase, dashboardFiles, dashboardLogs, dashboardCandidates, dashboardProcessedCount, interviewCache } = state;
 
-  // Lifted Dashboard State
-  const [dashboardPhase, setDashboardPhase] = useState<'INGEST' | 'PROCESSING' | 'RESULTS'>('INGEST');
-  const [dashboardFiles, setDashboardFiles] = useState<File[]>([]);
-  const [dashboardLogs, setDashboardLogs] = useState<string[]>([]);
-  const [dashboardCandidates, setDashboardCandidates] = useState<CandidateRank[]>([]);
-  const [dashboardProcessedCount, setDashboardProcessedCount] = useState<number>(0);
+  const {
+    isLogged, accountName, inviteCode, accountHistory,
+    setInviteCode, handleLogin, performLogout, loadHistory,
+    autoSaveWorkspace
+  } = useWorkspace();
 
-  // Lifted Interview Cache
-  const [interviewCache, setInterviewCache] = useState<Record<string, any>>({});
-
-  // Account & History State
-  const [inviteCode, setInviteCode] = useState<string>('');
-  const [accountName, setAccountName] = useState<string>(localStorage.getItem('jobos_account_name') || '');
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [accountHistory, setAccountHistory] = useState<any[]>([]);
-  const [isLogged, setIsLogged] = useState(!!localStorage.getItem('jobos_account_name'));
-
+  // 关联工作区自动更新
   useEffect(() => {
-    let interval: any;
-    if (isLogged) {
-      loadHistory();
-      api.heartbeat().catch(() => handleLogout()); // initial beat
-      interval = setInterval(() => {
-        api.heartbeat().catch(e => {
-          console.error(e);
-          alert("您的账号在别处登录或遇到错误被迫下线。");
-          handleLogout();
-        });
-      }, 60000); // beating every minute
-    }
-    return () => { if (interval) clearInterval(interval); };
-  }, [isLogged]);
-
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!inviteCode.trim()) return;
-    try {
-      const data = await api.login(inviteCode.trim());
-      setAccountName(data.account_name);
-      setIsLogged(true);
-    } catch (err: any) {
-      alert(err.message || '登录异常');
-    }
-  };
-
-  const handleLogout = async () => {
-    try { await api.logout(); } catch (e) { }
-    setIsLogged(false);
-    setAccountName('');
-    setInviteCode('');
-    setAccountHistory([]);
-    setStep('IDLE');
-    setDashboardPhase('INGEST');
-    setDashboardFiles([]);
-    setDashboardCandidates([]);
-    setJdData(INITIAL_JD);
-    setInterviewCache({});
-    api.setSessionId('xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
-      const r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
-      return v.toString(16);
-    })); // Force new session uuid assignment
-  };
-
-  const loadHistory = async () => {
-    try {
-      const hist = await api.getAccountHistory();
-      const parsedHist = hist.reduce((acc: any[], r: any) => {
-        try {
-          acc.push({
-            ...r,
-            content: typeof r.content === 'string' ? JSON.parse(r.content) : r.content
-          });
-        } catch (err) {
-          console.warn('Skipping corrupted history record:', r.id);
-        }
-        return acc;
-      }, []);
-      setAccountHistory(parsedHist);
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
-  // 自动触发工作区切片存盘 (Debounced)
-  useEffect(() => {
-    if (!isLogged || dashboardCandidates.length === 0) return;
-
     const timer = setTimeout(() => {
-      api.saveWorkspace(jdData, dashboardCandidates, interviewCache).catch(console.error);
+      autoSaveWorkspace(jdData, dashboardCandidates, interviewCache, dashboardProcessedCount);
     }, 2000);
-
     return () => clearTimeout(timer);
-  }, [dashboardCandidates, interviewCache, isLogged, jdData]);
+  }, [dashboardCandidates, interviewCache, isLogged, jdData, dashboardProcessedCount, autoSaveWorkspace]);
 
   const handleLoadHistoryRecord = async (record: any) => {
     let rawJd = null;
@@ -176,8 +84,8 @@ export default function JobOSCmdDeck() {
       isWorkspace = true;
       const wObj = typeof record.content === 'string' ? JSON.parse(record.content) : record.content;
       rawJd = wObj.jd_data || {};
-      setDashboardCandidates(wObj.candidates || []);
-      setInterviewCache(wObj.interview_cache || {});
+
+      // We process the rest downstream with the payload
     } else {
       return;
     }
@@ -199,23 +107,20 @@ export default function JobOSCmdDeck() {
       work_location: rawJd.work_location || "杭州"
     };
 
-    setJdData(finalJd);
-
-    // 强制同步后台 Session
     try {
       await api.setCurrentJd(finalJd);
     } catch (e) { console.error("Sync JD error", e); }
 
-    // 智能路由跳转
-    if (isWorkspace) {
-      setStep('DEPLOYED');
-      setDashboardPhase('RESULTS');
-    } else {
-      setStep('JD_REVIEW');
-    }
+    const payload = isWorkspace ? {
+      candidates: (typeof record.content === 'string' ? JSON.parse(record.content) : record.content).candidates || [],
+      interviewCache: (typeof record.content === 'string' ? JSON.parse(record.content) : record.content).interview_cache || {},
+      processedCount: (typeof record.content === 'string' ? JSON.parse(record.content) : record.content).processed_count || 0
+    } : undefined;
 
-    setIsSidebarOpen(false);
+    dispatch({ type: 'LOAD_HISTORY_RECORD', jd: finalJd, isWorkspace, payload });
   };
+
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   // Global Motion: Mouse Tracking
   useEffect(() => {
@@ -228,45 +133,20 @@ export default function JobOSCmdDeck() {
   }, []);
 
   // Handlers
-  const handleStart = (roleName: string) => {
-    setJdData(prev => ({ ...prev, title: roleName }));
-    setStep('BRIEFING');
-  };
-
-  const handleBriefComplete = (finalJd: JobDefinition) => {
-    setJdData(finalJd);
-    setStep('JD_REVIEW');
-  };
-
+  const handleStart = (roleName: string) => dispatch({ type: 'START_BRIEFING', roleName });
+  const handleBriefComplete = (finalJd: JobDefinition) => dispatch({ type: 'FINISH_BRIEFING', jd: finalJd });
   const handleJdConfirmed = async (confirmedJd: JobDefinition) => {
-    setJdData(confirmedJd);
-
-    try {
-      await api.setCurrentJd(confirmedJd);
-    } catch (e) { console.error("Sync JD error", e); }
-
-    setStep('DEPLOYED');
+    try { await api.setCurrentJd(confirmedJd); } catch (e) { console.error("Sync JD error", e); }
+    dispatch({ type: 'CONFIRM_JD', jd: confirmedJd });
   };
 
-  const handleStartInterviewFlow = (candidate: CandidateRank) => {
-    setShortlistedCandidates(prev => {
-      if (prev.find(c => c.resume_id === candidate.resume_id)) return prev; // Use resume_id strictly
-      return [...prev, candidate];
-    });
-    setStep('INTERVIEW_PREP');
-  };
+  const handleStartInterviewFlow = (candidate: CandidateRank) => dispatch({ type: 'START_INTERVIEW', candidate });
+  const handleBack = () => dispatch({ type: 'NAV_BACK' });
 
-  const handleBack = () => {
-    if (step === 'BRIEFING') setStep('IDLE');
-    if (step === 'JD_REVIEW') setStep('BRIEFING');
-    if (step === 'DEPLOYED') {
-      // 退出 Dashboard 时重置 phase，确保下次进入时从上传简历开始
-      setDashboardPhase('INGEST');
-      setDashboardFiles([]);
-      setDashboardCandidates([]);
-      setStep('JD_REVIEW');
-    }
-    if (step === 'INTERVIEW_PREP') setStep('DEPLOYED');
+  const handleLogoutFull = async () => {
+    await performLogout();
+    dispatch({ type: 'RESET_ALL', initialJd: INITIAL_JD });
+    setIsSidebarOpen(false);
   };
 
   return (
@@ -331,7 +211,7 @@ export default function JobOSCmdDeck() {
                 <div className="w-8 h-8 rounded-full bg-indigo-500/20 border border-indigo-500/50 flex items-center justify-center text-indigo-400">
                   <Unlock className="w-4 h-4" />
                 </div>
-                <button onClick={handleLogout} className="ml-1 w-8 h-8 rounded-lg bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 flex items-center justify-center text-red-500 transition-colors" title="注销登录">
+                <button onClick={handleLogoutFull} className="ml-1 w-8 h-8 rounded-lg bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 flex items-center justify-center text-red-500 transition-colors" title="注销登录">
                   <LogOut className="w-4 h-4" />
                 </button>
               </div>
@@ -432,9 +312,9 @@ export default function JobOSCmdDeck() {
           {step === 'IDLE' && (
             <motion.div key="landing" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, filter: 'blur(20px)', scale: 1.05 }} transition={{ duration: 0.5 }} className="flex-1 flex flex-col">
               <LandingPage onStart={handleStart} isLogged={isLogged} onSkipToDashboard={() => {
-                // 从主页直接进入简历库，重置 phase 确保展示上传界面而非上次残留的 RESULTS
-                setDashboardPhase('INGEST');
-                setStep('DEPLOYED');
+                dispatch({ type: 'SET_DASHBOARD_PHASE', phase: 'INGEST' });
+                dispatch({ type: 'SET_JD_DATA', jd: INITIAL_JD }); // or keep current
+                dispatch({ type: 'CONFIRM_JD', jd: jdData }); // essentially SET_STEP to DEPLOYED
               }} />
             </motion.div>
           )}
@@ -455,21 +335,21 @@ export default function JobOSCmdDeck() {
                 jdData={jdData}
                 // Lifted Props
                 phase={dashboardPhase}
-                setPhase={setDashboardPhase}
+                setPhase={(phase) => dispatch({ type: 'SET_DASHBOARD_PHASE', phase })}
                 files={dashboardFiles}
-                setFiles={setDashboardFiles}
+                setFiles={(files) => dispatch({ type: 'SET_DASHBOARD_FILES', files })}
                 logs={dashboardLogs}
-                setLogs={setDashboardLogs}
+                setLogs={(logs) => dispatch({ type: 'SET_DASHBOARD_LOGS', logs })}
                 candidates={dashboardCandidates}
-                setCandidates={setDashboardCandidates}
+                setCandidates={(candidates) => dispatch({ type: 'SET_DASHBOARD_CANDIDATES', candidates })}
                 processedCount={dashboardProcessedCount}
-                setProcessedCount={setDashboardProcessedCount}
+                setProcessedCount={(count) => dispatch({ type: 'SET_DASHBOARD_PROCESSED_COUNT', count })}
               />
             </motion.div>
           )}
           {step === 'INTERVIEW_PREP' && (
             <motion.div key="interview" initial={{ opacity: 0, x: 50 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 50 }} className="flex-1 overflow-hidden h-full">
-              <InterviewPanel candidates={shortlistedCandidates} cache={interviewCache} setCache={setInterviewCache} />
+              <InterviewPanel candidates={shortlistedCandidates} cache={interviewCache} setCache={(cache) => dispatch({ type: 'SET_INTERVIEW_CACHE', cache })} />
             </motion.div>
           )}
         </AnimatePresence>

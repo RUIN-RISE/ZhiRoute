@@ -99,6 +99,17 @@ function getHeaders(contentType = 'application/json'): HeadersInit {
 	};
 }
 
+async function handleResError(res: Response, defaultMsg: string): Promise<never> {
+	let detail = '';
+	try {
+		const data = await res.json();
+		detail = data?.detail || data?.message || data?.error || '';
+	} catch (e) {
+		// Ignore json parse error if response is not JSON
+	}
+	throw new Error(`${defaultMsg}${detail ? `: ${detail}` : ` (HTTP ${res.status})`}`);
+}
+
 // API Functions
 export const api = {
 	// Auth
@@ -141,17 +152,18 @@ export const api = {
 	},
 
 	// Workspace snapshot
-	async saveWorkspace(jdData: any, candidates: any[], interviewCache: any): Promise<void> {
+	async saveWorkspace(jdData: any, candidates: any[], interviewCache: any, processedCount: number = 0): Promise<void> {
 		const res = await fetch(`${API_BASE}/save_workspace`, {
 			method: 'POST',
 			headers: getHeaders(),
 			body: JSON.stringify({
 				jd_data: jdData,
 				candidates: candidates,
-				interview_cache: interviewCache
+				interview_cache: interviewCache,
+				processed_count: processedCount
 			})
 		});
-		if (!res.ok) throw new Error(`Save workspace failed: ${res.status}`);
+		if (!res.ok) await handleResError(res, '保存工作区快照失败');
 	},
 
 	// Multi-turn chat for requirement clarification
@@ -161,7 +173,7 @@ export const api = {
 			headers: getHeaders(),
 			body: JSON.stringify({ message, history })
 		});
-		if (!res.ok) throw new Error(`Chat failed: ${res.status}`);
+		if (!res.ok) await handleResError(res, '发起聊天请求失败');
 		return res.json();
 	},
 
@@ -180,7 +192,7 @@ export const api = {
 			headers: getHeaders(),
 			body: JSON.stringify({ answers, raw_req: rawReq })
 		});
-		if (!res.ok) throw new Error(`Generate JD failed: ${res.status}`);
+		if (!res.ok) await handleResError(res, '生成职位描述 (JD) 失败');
 		return res.json();
 	},
 
@@ -191,7 +203,7 @@ export const api = {
 			headers: getHeaders(),
 			body: JSON.stringify(jd)
 		});
-		if (!res.ok) throw new Error(`Set current JD failed: ${res.status}`);
+		if (!res.ok) await handleResError(res, '同步云端JD状态失败');
 	},
 
 	// 删除单条历史记录
@@ -200,7 +212,7 @@ export const api = {
 			method: 'DELETE',
 			headers: getHeaders()
 		});
-		if (!res.ok) throw new Error(`Delete history failed: ${res.status}`);
+		if (!res.ok) await handleResError(res, '删除历史记录失败');
 	},
 
 	// 通过 LLM 生成适合对外发布的完整 JD Markdown 文档
@@ -209,7 +221,7 @@ export const api = {
 			method: 'POST',
 			headers: getHeaders()
 		});
-		if (!res.ok) throw new Error(`Generate JD markdown failed: ${res.status}`);
+		if (!res.ok) await handleResError(res, 'AI 排版 Markdown 失败');
 		return res.json();
 	},
 
@@ -219,7 +231,7 @@ export const api = {
 			method: 'POST',
 			headers: getHeaders()
 		});
-		if (!res.ok) throw new Error(`Clear resumes failed: ${res.status}`);
+		if (!res.ok) await handleResError(res, '清空简历缓存失败');
 	},
 
 	// Upload resumes (zip/txt/pdf)
@@ -235,7 +247,7 @@ export const api = {
 			headers: headers,
 			body: formData
 		});
-		if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
+		if (!res.ok) await handleResError(res, '上传合并简历失败');
 		return res.json();
 	},
 
@@ -260,7 +272,7 @@ export const api = {
 				// The backend returns the cumulative amount of resumes for the user in the session
 				latestResumes = await res.json();
 			} else {
-				throw new Error(`包含文件 [${file.name}] 的上传批次解析失败，服务器拒绝了其格式或发生了意外。已中断批量上传。`);
+				await handleResError(res, `包含文件 [${file.name}] 的批量上传因意外失败响应被服务器拦截至退出`);
 			}
 		}
 
@@ -272,7 +284,7 @@ export const api = {
 		const res = await fetch(`${API_BASE}/generate_fake_resumes`, {
 			headers: getHeaders()
 		});
-		if (!res.ok) throw new Error(`Generate fake resumes failed: ${res.status}`);
+		if (!res.ok) await handleResError(res, '注入模拟简历集合请求失败');
 		return res.json();
 	},
 
@@ -282,7 +294,7 @@ export const api = {
 			method: 'POST',
 			headers: getHeaders()
 		});
-		if (!res.ok) throw new Error(`Analyze failed: ${res.status}`);
+		if (!res.ok) await handleResError(res, '简历打分排行榜请求失败');
 		return res.json();
 	},
 
@@ -297,7 +309,7 @@ export const api = {
 				job_title: jobTitle
 			})
 		});
-		if (!res.ok) throw new Error(`Generate action failed: ${res.status}`);
+		if (!res.ok) await handleResError(res, 'AI 动作生成与发信配置失败');
 		return res.json();
 	},
 
@@ -307,7 +319,7 @@ export const api = {
 		const res = await fetch(url, {
 			headers: getHeaders()
 		});
-		if (!res.ok) throw new Error(`Get history failed: ${res.status}`);
+		if (!res.ok) await handleResError(res, '获取云端历史状态切片失败');
 		return res.json();
 	},
 
@@ -317,7 +329,7 @@ export const api = {
 			method: 'DELETE',
 			headers: getHeaders()
 		});
-		if (!res.ok) throw new Error(`Delete private resume failed: ${res.status}`);
+		if (!res.ok) await handleResError(res, '彻底删除私有云简历实体失败');
 	},
 
 	// Upload private resumes (multiple files) to cloud node
@@ -334,7 +346,7 @@ export const api = {
 					headers: headers,
 					body: formData
 				});
-				if (!res.ok) throw new Error(`Upload private resume failed: ${res.status}`);
+				if (!res.ok) await handleResError(res, `上传私有简历 ${file.name} 失败`);
 				const data = await res.json();
 				results.push(data);
 			} catch (e) {
@@ -350,7 +362,7 @@ export const api = {
 		const res = await fetch(`${API_BASE}/list_private_resumes`, {
 			headers: getHeaders()
 		});
-		if (!res.ok) throw new Error(`List private resumes failed: ${res.status}`);
+		if (!res.ok) await handleResError(res, '列出云端私有简历失败');
 		return res.json();
 	},
 
@@ -360,7 +372,7 @@ export const api = {
 			method: 'POST',
 			headers: getHeaders()
 		});
-		if (!res.ok) throw new Error(`Fetch private resumes failed: ${res.status}`);
+		if (!res.ok) await handleResError(res, '拉取私有简历进行热处理失败');
 		return res.json();
 	},
 
@@ -370,7 +382,7 @@ export const api = {
 			method: 'POST',
 			headers: getHeaders()
 		});
-		if (!res.ok) throw new Error(`Fetch public resumes failed: ${res.status}`);
+		if (!res.ok) await handleResError(res, '拉取内测公共库进行热处理失败');
 		return res.json();
 	},
 
