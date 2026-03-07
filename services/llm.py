@@ -518,11 +518,29 @@ def rank_candidates(jd: JobDefinition, resumes: List[Dict]) -> List[CandidateRan
         try:
             data = json.loads(json_str)
         except json.JSONDecodeError as e:
-            print(f"JSON Decode Error: {e}. Attempting repair...")
-            fixed_str = re.sub(r'}\s*{', '}, {', json_str)
-            if not fixed_str.strip().startswith('['):
-                fixed_str = f"[{fixed_str}]"
-            data = json.loads(fixed_str)
+            print(f"JSON Decode Error: {e}. Attempting robust repair...")
+            data = []
+            # Try to grab all individual JSON objects using regex
+            import re
+            objs = re.findall(r'\{[^{]*"score"[^}]*\}', json_str)
+            for obj_str in objs:
+                try:
+                    # Basic attempts to fix common broken JSON trailing commas
+                    obj_str = re.sub(r',\s*\}', '}', obj_str)
+                    data.append(json.loads(obj_str))
+                except:
+                    pass
+            if not data:
+                # Fallback to simple replacement if regex fails completely
+                fixed_str = re.sub(r'}\s*{', '}, {', json_str)
+                if not fixed_str.strip().startswith('['):
+                    fixed_str = f"[{fixed_str}]"
+                if not fixed_str.strip().endswith(']'):
+                    fixed_str += '}]'
+                try:
+                    data = json.loads(fixed_str)
+                except:
+                    pass
         
         if isinstance(data, dict):
             if "error" in data:

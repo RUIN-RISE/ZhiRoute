@@ -249,8 +249,8 @@ async def download_public_resume():
 async def upload_private_resume(account_name: str = Form(...), session_id: str = Form(...), file: UploadFile = File(...)):
     """上传私有简历压缩包或PDF到对应的账号隔离目录下"""
     validate_cloud_session(account_name, session_id)
-    if not file.filename.lower().endswith(('.zip', '.pdf')):
-        raise HTTPException(400, "Only .zip or .pdf allowed for private resumes.")
+    if not file.filename.lower().endswith(('.zip', '.pdf', '.txt', '.md')):
+        raise HTTPException(400, "Only .zip, .pdf, .txt, .md allowed for private resumes.")
         
     account_dir = os.path.abspath(os.path.join(UPLOAD_DIR, account_name))
     if not account_dir.startswith(os.path.abspath(UPLOAD_DIR)):
@@ -287,6 +287,48 @@ async def download_private_resume(account_name: str, filename: str, session_id: 
         raise HTTPException(404, "Private resume not found for this account.")
         
     return FileResponse(file_path)
+
+@app.post("/api/cloud/delete_private_resume/{account_name}/{filename}")
+async def delete_private_resume_cloud(account_name: str, filename: str, session_id: str):
+    """删除某账号下指定的私有简历"""
+    validate_cloud_session(account_name, session_id)
+    account_dir = os.path.abspath(os.path.join(UPLOAD_DIR, account_name))
+    safe_filename = os.path.basename(filename)
+    file_path = os.path.abspath(os.path.join(account_dir, safe_filename))
+    
+    if not file_path.startswith(account_dir):
+        raise HTTPException(403, "Invalid file path.")
+        
+    if os.path.exists(file_path):
+        os.remove(file_path)
+        return {"status": "success"}
+    else:
+        raise HTTPException(404, "File not found.")
+
+@app.get("/api/cloud/list_private_resumes/{account_name}")
+async def list_private_resumes(account_name: str, session_id: str):
+    """获取某个账号下的所有私有简历包/文件清单"""
+    validate_cloud_session(account_name, session_id)
+    account_dir = os.path.abspath(os.path.join(UPLOAD_DIR, account_name))
+    
+    if not os.path.exists(account_dir):
+        return []
+        
+    files = []
+    for f in os.listdir(account_dir):
+        if f.lower().endswith(('.zip', '.pdf', '.txt', '.md')):
+            try:
+                st = os.stat(os.path.join(account_dir, f))
+                files.append({
+                    "filename": f,
+                    "size": st.st_size,
+                    "created_at": st.st_ctime
+                })
+            except Exception:
+                pass
+                
+    files.sort(key=lambda x: x["created_at"], reverse=True)
+    return files
 
 if __name__ == "__main__":
     import sys

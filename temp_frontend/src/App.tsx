@@ -29,7 +29,8 @@ import {
   RefreshCw,
   Trash2,
   Copy,
-  CheckCheck
+  CheckCheck,
+  Check
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -972,12 +973,15 @@ function ExecutionDashboard({
   candidates, setCandidates,
   processedCount, setProcessedCount
 }: DashboardProps) {
-  // Local UI state
   const [isDragOver, setIsDragOver] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<number>(0);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   // processedCount is now a prop
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const [isPrivateSelectorOpen, setIsPrivateSelectorOpen] = useState(false);
+  const [privateResumes, setPrivateResumes] = useState<{ filename: string, size: number, created_at: number }[]>([]);
+  const [isLoadingPrivateList, setIsLoadingPrivateList] = useState(false);
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault(); setIsDragOver(false);
@@ -985,10 +989,11 @@ function ExecutionDashboard({
     if (files.length > 0) setUploadedFiles(prev => [...prev, ...files].slice(0, 50));
   };
 
-  const [cloudSource, setCloudSource] = useState<'public' | { type: 'private', filename: string } | null>(null);
+  const [usePublicCloud, setUsePublicCloud] = useState(false);
+  const [selectedPrivateFiles, setSelectedPrivateFiles] = useState<string[]>([]);
 
   const startProcessing = async () => {
-    if (uploadedFiles.length === 0 && !cloudSource) return;
+    if (uploadedFiles.length === 0 && !usePublicCloud && selectedPrivateFiles.length === 0) return;
     if (!jdData || !jdData.title) {
       alert("请先创建新需求或从右上角载入一份生效的历史职位描述 (JD)，再启动简历分析匹配！");
       return;
@@ -1002,33 +1007,48 @@ function ExecutionDashboard({
     try {
       setPhase('PROCESSING');
 
-      // Step 1: Sync JD
+      // Step 1: Sync JD & Clean Pool
       try {
         await api.setCurrentJd(jdData);
+        await api.clearResumes();
       } catch (err) {
-        console.warn("Could not sync JD data to backend", err);
+        console.warn("Could not sync JD data to backend or clear cache", err);
       }
 
       // Step 2: Ingest
-      let resultResumes = [];
+      let resultResumes: any[] = [];
+
       if (uploadedFiles.length > 0) {
         setLogs(prev => [...prev, "[INFO] 本地上传简历中..."]);
-        resultResumes = await api.uploadMultipleResumes(uploadedFiles);
-        if (resultResumes.length === 0 && uploadedFiles.length > 0) {
-          throw new Error("无可用且解析成功的简历。");
-        } else if (resultResumes.length < uploadedFiles.length) {
-          setLogs(prev => [...prev, `[WARNING] 部分简历失败。仅成功 ${resultResumes.length} 份。`]);
+        const localResumes = await api.uploadMultipleResumes(uploadedFiles);
+        if (localResumes.length === 0) {
+          throw new Error("无可用且解析成功的本地简历。");
+        } else if (localResumes.length < uploadedFiles.length) {
+          setLogs(prev => [...prev, `[WARNING] 部分本地简历失败。仅成功 ${localResumes.length} 份。`]);
         }
-      } else if (cloudSource === 'public') {
+        resultResumes = localResumes;
+      }
+
+      if (usePublicCloud) {
         setLogs(prev => [...prev, "[INFO] 从云端拉取公有简历集..."]);
-        resultResumes = await api.fetchPublicResumes();
-      } else if (cloudSource?.type === 'private') {
-        setLogs(prev => [...prev, `[INFO] 从云端拉取私有库包: ${cloudSource.filename}...`]);
-        resultResumes = await api.fetchPrivateResumes(cloudSource.filename);
+        const pubResumes = await api.fetchPublicResumes();
+        resultResumes = pubResumes;
+      }
+
+      if (selectedPrivateFiles.length > 0) {
+        setLogs(prev => [...prev, `[INFO] 从云端拉取已选的 ${selectedPrivateFiles.length} 个私有简历文件...`]);
+        for (const fname of selectedPrivateFiles) {
+          try {
+            const privResumes = await api.fetchPrivateResumes(fname);
+            resultResumes = privResumes;
+          } catch (err) {
+            setLogs(prev => [...prev, `[ERROR] 拉取私有文件 ${fname} 失败`]);
+          }
+        }
       }
 
       setProcessedCount(resultResumes.length);
-      setLogs(prev => [...prev, `[SUCCESS] 简历准备完成，共就绪 ${resultResumes.length} 份...`]);
+      setLogs(prev => [...prev, `[SUCCESS] 简历准备完成，本次分析池共就绪 ${resultResumes.length} 份...`]);
 
       // Step 3: Analyze
       setLogs(prev => [...prev, "[ANALYSIS] 正在进行多维能力画像匹配... (可能需要1-2分钟)"]);
@@ -1052,27 +1072,43 @@ function ExecutionDashboard({
 
   const handleSelectCloudSource = (type: 'public' | 'private') => {
     if (type === 'public') {
-      setCloudSource('public');
-      setUploadedFiles([]);
+      setUsePublicCloud(!usePublicCloud);
     } else {
-      const val = prompt("请输入您存放在云端的私有简历包的文件名 (例如: my_resumes.zip):");
-      if (val) {
-        setCloudSource({ type: 'private', filename: val.trim() });
-        setUploadedFiles([]);
-      }
+      setIsPrivateSelectorOpen(true);
+      setIsLoadingPrivateList(true);
+      api.listPrivateResumes()
+        .then(setPrivateResumes)
+        .catch(e => alert(e.message))
+        .finally(() => setIsLoadingPrivateList(false));
+    }
+  };
+
+  const togglePrivateFile = (filename: string) => {
+    setSelectedPrivateFiles(prev =>
+      prev.includes(filename) ? prev.filter(f => f !== filename) : [...prev, filename]
+    );
+  };
+
+  const handleDeletePrivateFile = async (e: React.MouseEvent, filename: string) => {
+    e.stopPropagation();
+    if (!confirm(`确定要从云端永久删除私有文件 [${filename}] 吗？\n删除后不可恢复。`)) return;
+    try {
+      await api.deletePrivateResume(filename);
+      setSelectedPrivateFiles(prev => prev.filter(f => f !== filename));
+      setPrivateResumes(prev => prev.filter(f => f.filename !== filename));
+    } catch (err: any) {
+      alert(err.message);
     }
   };
 
   const handleUploadToPrivateCloud = async () => {
-    if (uploadedFiles.length !== 1 || !uploadedFiles[0].name.endsWith('.zip')) {
-      alert("请选择且仅选择一个 ZIP 格式的文件作为您的云端私有简历池。");
-      return;
-    }
-    if (!confirm(`即将把 ${uploadedFiles[0].name} 上传至您的专属云端，请确认？`)) return;
+    if (uploadedFiles.length === 0) return;
+    const names = uploadedFiles.map(f => f.name).join(', ');
+    if (!confirm(`即将把 ${uploadedFiles.length} 个文件上传至您的专属云端，请确认？\n\n${names}`)) return;
 
     try {
-      await api.uploadPrivateResume(uploadedFiles[0]);
-      alert("上传云端成功！您之后可以通过'拉取账号私有'随时调取该文件。");
+      await api.uploadPrivateResumes(uploadedFiles);
+      alert("上传云端成功！您之后可以通过'拉取账号私有'随时调取这些文件。");
       setUploadedFiles([]);
     } catch (e) {
       console.error(e);
@@ -1093,20 +1129,74 @@ function ExecutionDashboard({
             onClick={() => fileInputRef.current?.click()}
             className={cn("w-full aspect-[2.5/1] border-2 border-dashed rounded-[2rem] flex flex-col items-center justify-center relative overflow-hidden cursor-pointer transition-all duration-300", isDragOver ? "border-indigo-500 bg-indigo-500/10 scale-[1.02]" : "border-white/10 bg-white/[0.02] hover:border-indigo-500/30 hover:bg-white/[0.04]")}
           >
-            <input ref={fileInputRef} type="file" multiple accept=".pdf,.txt,.md,.zip" onChange={e => { if (e.target.files?.length) { setUploadedFiles(prev => [...prev, ...Array.from(e.target.files!)]); setCloudSource(null); } }} className="hidden" />
+            <input ref={fileInputRef} type="file" multiple accept=".pdf,.txt,.md,.zip" onChange={e => { if (e.target.files?.length) { setUploadedFiles(prev => [...prev, ...Array.from(e.target.files!)]); } }} className="hidden" />
             <div className={cn("w-20 h-20 rounded-2xl flex items-center justify-center mb-6 transition-all duration-300", isDragOver ? "bg-indigo-600 scale-110" : "bg-black border border-white/10")}><UploadCloud className={cn("w-8 h-8", isDragOver ? "text-white" : "text-indigo-400")} /></div>
             <h3 className="text-2xl font-bold text-white mb-2">{isDragOver ? "释放以上传文件" : "拖拽本地简历到这里"}</h3>
             <p className="text-zinc-500 text-sm text-center mb-4">或者 <span className="text-indigo-400 hover:underline">点击选择本地文件</span></p>
           </div>
 
           <div className="flex gap-4 w-full justify-center mt-2">
-            <button onClick={() => handleSelectCloudSource('public')} className={cn("px-6 py-3 border border-white/10 rounded-xl transition-colors text-sm font-bold flex items-center gap-2", cloudSource === 'public' ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/50" : "bg-white/5 text-white hover:bg-white/10")}>
-              <UploadCloud className="w-4 h-4 text-emerald-400" /> {cloudSource === 'public' ? "已选定：公有简历池" : "选择公有简历池"}
+            <button onClick={() => handleSelectCloudSource('public')} className={cn("px-6 py-3 border border-white/10 rounded-xl transition-colors text-sm font-bold flex items-center gap-2", usePublicCloud ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/50" : "bg-white/5 text-white hover:bg-white/10")}>
+              <UploadCloud className={cn("w-4 h-4", usePublicCloud ? "text-emerald-400" : "text-white/50")} /> {usePublicCloud ? "已选定：公有简历池" : "包含公有简历池"}
             </button>
-            <button onClick={() => handleSelectCloudSource('private')} className={cn("px-6 py-3 border border-white/10 rounded-xl transition-colors text-sm font-bold flex items-center gap-2", cloudSource && typeof cloudSource === 'object' && cloudSource.type === 'private' ? "bg-purple-500/20 text-purple-300 border-purple-500/50" : "bg-white/5 text-white hover:bg-white/10")}>
-              <UploadCloud className="w-4 h-4 text-purple-400" /> {cloudSource && typeof cloudSource === 'object' && cloudSource.type === 'private' ? `已选定：${cloudSource.filename}` : "选择账号私有简历"}
+            <button onClick={() => handleSelectCloudSource('private')} className={cn("px-6 py-3 border border-white/10 rounded-xl transition-colors text-sm font-bold flex items-center gap-2", selectedPrivateFiles.length > 0 ? "bg-purple-500/20 text-purple-300 border-purple-500/50" : "bg-white/5 text-white hover:bg-white/10")}>
+              <UploadCloud className={cn("w-4 h-4", selectedPrivateFiles.length > 0 ? "text-purple-400" : "text-white/50")} /> {selectedPrivateFiles.length > 0 ? `已选定 ${selectedPrivateFiles.length} 份账号私有简历` : "选择账号私有简历"}
             </button>
           </div>
+
+          <AnimatePresence>
+            {isPrivateSelectorOpen && (
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsPrivateSelectorOpen(false)} />
+                <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="relative bg-[#0A0A0B] border border-white/10 rounded-2xl p-6 w-full max-w-lg shadow-2xl">
+                  <div className="flex items-center justify-between mb-6">
+                    <h3 className="text-xl font-bold flex items-center gap-2"><UploadCloud className="w-5 h-5 text-purple-400" /> 选择云端私有简历</h3>
+                    <button onClick={() => setIsPrivateSelectorOpen(false)} className="text-zinc-500 hover:text-white transition-colors"><XCircle className="w-5 h-5" /></button>
+                  </div>
+
+                  {isLoadingPrivateList ? (
+                    <div className="py-12 flex flex-col items-center justify-center text-zinc-500">
+                      <Loader2 className="w-8 h-8 animate-spin mb-4 text-purple-500" />
+                      <p>正在扫描账号目录...</p>
+                    </div>
+                  ) : privateResumes.length > 0 ? (
+                    <div className="space-y-3 max-h-60 overflow-y-auto pr-2">
+                      {privateResumes.map(r => {
+                        const isSelected = selectedPrivateFiles.includes(r.filename);
+                        return (
+                          <div key={r.filename} onClick={() => togglePrivateFile(r.filename)} className={cn("flex items-center justify-between p-4 rounded-xl border cursor-pointer transition-all group", isSelected ? "bg-purple-500/10 border-purple-500/50" : "border-white/5 bg-white/[0.02] hover:bg-white/[0.05] hover:border-purple-500/30")}>
+                            <div className="flex items-center gap-3">
+                              <div className={cn("w-10 h-10 rounded-lg flex items-center justify-center", isSelected ? "bg-purple-500/20" : "bg-white/5 group-hover:bg-purple-500/10")}>
+                                <FileText className={cn("w-5 h-5", isSelected ? "text-purple-400" : "text-zinc-500 group-hover:text-purple-400")} />
+                              </div>
+                              <div>
+                                <div className={cn("text-sm font-bold transition-colors", isSelected ? "text-purple-300" : "text-white group-hover:text-purple-300")}>{r.filename}</div>
+                                <div className="text-xs text-zinc-500 mt-1 flex gap-3">
+                                  <span>{(r.size / 1024 / 1024).toFixed(2)} MB</span>
+                                  <span>{new Date(r.created_at * 1000).toLocaleString()}</span>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {isSelected && <div className="w-6 h-6 rounded-full bg-purple-500 flex items-center justify-center shrink-0"><Check className="w-4 h-4 text-white" /></div>}
+                              <button onClick={(e) => handleDeletePrivateFile(e, r.filename)} className="p-2 text-zinc-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all opacity-0 group-hover:opacity-100" title="删除此云端简历">
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  ) : (
+                    <div className="py-12 flex flex-col items-center justify-center text-zinc-500 border border-dashed border-white/10 rounded-xl bg-white/[0.01]">
+                      <Archive className="w-8 h-8 mb-4 opacity-50" />
+                      <p>未发现任何云端私有简历 (请先上传 .zip)</p>
+                    </div>
+                  )}
+                </motion.div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {uploadedFiles.length > 0 && (
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-white/[0.02] border border-white/10 rounded-2xl p-6 mt-4 w-full">
@@ -1117,7 +1207,7 @@ function ExecutionDashboard({
           )}
 
           <div className="flex justify-center gap-4 mt-4">
-            <button onClick={startProcessing} disabled={uploadedFiles.length === 0 && !cloudSource} className={cn("px-12 py-4 rounded-2xl font-bold text-base transition-all flex items-center gap-3", (uploadedFiles.length > 0 || cloudSource) ? "bg-indigo-600 hover:bg-indigo-500 text-white shadow-[0_0_40px_rgba(79,70,229,0.4)] active:scale-95" : "bg-white/5 text-zinc-600 cursor-not-allowed")}><Cpu className="w-5 h-5" />{uploadedFiles.length > 0 ? "本地提析与匹配" : "云端提析与匹配"}</button>
+            <button onClick={startProcessing} disabled={uploadedFiles.length === 0 && !usePublicCloud && selectedPrivateFiles.length === 0} className={cn("px-12 py-4 rounded-2xl font-bold text-base transition-all flex items-center gap-3", (uploadedFiles.length > 0 || usePublicCloud || selectedPrivateFiles.length > 0) ? "bg-indigo-600 hover:bg-indigo-500 text-white shadow-[0_0_40px_rgba(79,70,229,0.4)] active:scale-95" : "bg-white/5 text-zinc-600 cursor-not-allowed")}><Cpu className="w-5 h-5" />提析与匹配</button>
             <button onClick={handleUploadToPrivateCloud} disabled={uploadedFiles.length === 0} className={cn("px-6 py-4 rounded-2xl font-bold text-base transition-all flex items-center", uploadedFiles.length > 0 ? "bg-[#0A0A0B] border border-indigo-500/50 hover:bg-indigo-500/10 text-indigo-400 shadow-[0_0_20px_rgba(79,70,229,0.1)] active:scale-95 cursor-pointer" : "bg-white/5 text-zinc-600 hidden")}>仅上传至私有库</button>
           </div>
         </div>

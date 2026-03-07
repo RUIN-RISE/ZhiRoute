@@ -213,6 +213,15 @@ export const api = {
 		return res.json();
 	},
 
+	// Clear accumulated resumes in current session
+	async clearResumes(): Promise<void> {
+		const res = await fetch(`${API_BASE}/clear_resumes`, {
+			method: 'POST',
+			headers: getHeaders()
+		});
+		if (!res.ok) throw new Error(`Clear resumes failed: ${res.status}`);
+	},
+
 	// Upload resumes (zip/txt/pdf)
 	async uploadResumes(file: File): Promise<Resume[]> {
 		const formData = new FormData();
@@ -298,22 +307,50 @@ export const api = {
 		const res = await fetch(url, {
 			headers: getHeaders()
 		});
-		if (!res.ok) throw new Error(`Fetch history failed: ${res.status}`);
+		if (!res.ok) throw new Error(`Get history failed: ${res.status}`);
 		return res.json();
 	},
 
-	// Upload a private resume zip to cloud node
-	async uploadPrivateResume(file: File): Promise<any> {
-		const formData = new FormData();
-		formData.append('file', file);
+	// Delete private resume from cloud
+	async deletePrivateResume(filename: string): Promise<void> {
+		const res = await fetch(`${API_BASE}/delete_private_resume/${encodeURIComponent(filename)}`, {
+			method: 'DELETE',
+			headers: getHeaders()
+		});
+		if (!res.ok) throw new Error(`Delete private resume failed: ${res.status}`);
+	},
+
+	// Upload private resumes (multiple files) to cloud node
+	async uploadPrivateResumes(files: File[]): Promise<any[]> {
+		const results = [];
 		const headers: any = { 'X-Session-ID': getSessionId() };
 
-		const res = await fetch(`${API_BASE}/upload_private_resume`, {
-			method: 'POST',
-			headers: headers,
-			body: formData
+		for (const file of files) {
+			const formData = new FormData();
+			formData.append('file', file);
+			try {
+				const res = await fetch(`${API_BASE}/upload_private_resume`, {
+					method: 'POST',
+					headers: headers,
+					body: formData
+				});
+				if (!res.ok) throw new Error(`Upload private resume failed: ${res.status}`);
+				const data = await res.json();
+				results.push(data);
+			} catch (e) {
+				console.error(`Failed to upload ${file.name}`, e);
+				throw e;
+			}
+		}
+		return results;
+	},
+
+	// List private resumes for the account
+	async listPrivateResumes(): Promise<{ filename: string, size: number, created_at: number }[]> {
+		const res = await fetch(`${API_BASE}/list_private_resumes`, {
+			headers: getHeaders()
 		});
-		if (!res.ok) throw new Error(`Upload private resume failed: ${res.status}`);
+		if (!res.ok) throw new Error(`List private resumes failed: ${res.status}`);
 		return res.json();
 	},
 

@@ -245,9 +245,13 @@ async def generate_jd_endpoint(req: GenerateJdRequest, bg_tasks: BackgroundTasks
     
     return jd
 
+@app.post("/api/clear_resumes")
+async def clear_resumes_endpoint(user: UserState = Depends(get_current_user)):
+    user.resumes.clear()
+    return {"status": "ok", "message": "Resumes cleared"}
+
 @app.post("/api/upload_resumes", response_model=List[Resume])
 async def upload_resumes(file: UploadFile = File(...), user: UserState = Depends(get_current_user)):
-    user.resumes.clear()
     content = await file.read()
     filename = file.filename
     return await process_resume_content(content, filename, user)
@@ -379,8 +383,6 @@ async def fetch_resumes_from_cloud(user: UserState = Depends(get_current_user)):
             response = await client.get(url)
             response.raise_for_status()
             
-            # 清理当前账号环境已缓存简历，避免多次拉取导致累加
-            user.resumes.clear()
             # 使用提取出的核心解析逻辑来处理下载到的字节流
             return await process_resume_content(response.content, "output_resume.zip", user)
     except Exception as e:
@@ -481,9 +483,27 @@ async def upload_private(file: UploadFile = File(...), user: UserState = Depends
     url = f"{cloud_api}/api/cloud/upload_private_resume"
     print(f"Uploading private format to: {url}")
     
+    content_bytes = await file.read()
+    filename = file.filename
+    content_type = file.content_type
+    
+    if filename.lower().endswith('.pdf'):
+        try:
+            import fitz
+            doc = fitz.open(stream=content_bytes, filetype="pdf")
+            text = "".join([page.get_text() for page in doc]).strip()
+            doc.close()
+            if text:
+                content_bytes = text.encode('utf-8')
+                filename = filename[:-4] + '.txt'
+                content_type = 'text/plain'
+        except Exception as e:
+            print(f"Failed to convert PDF to TXT during upload: {e}")
+            pass # fallback to uploading raw PDF
+            
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
-            files = {'file': (file.filename, await file.read(), file.content_type)}
+            files = {'file': (filename, content_bytes, content_type)}
             data = {'account_name': user.account_name, 'session_id': user.session_id}
             resp = await client.post(url, data=data, files=files)
             resp.raise_for_status()
@@ -491,6 +511,46 @@ async def upload_private(file: UploadFile = File(...), user: UserState = Depends
     except Exception as e:
         print(f"Error uploading private resume: {e}")
         raise HTTPException(500, detail="Failed to upload to cloud")
+
+@app.get("/api/list_private_resumes")
+async def list_private_resumes_api(user: UserState = Depends(get_current_user)):
+    import os
+    from dotenv import load_dotenv
+    import httpx
+    
+    load_dotenv(override=True)
+    cloud_api = os.getenv("CLOUD_STORAGE_API", "http://163.7.10.125:80")
+    
+    url = f"{cloud_api}/api/cloud/list_private_resumes/{user.account_name}?session_id={user.session_id}"
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(url)
+            resp.raise_for_status()
+            return resp.json()
+    except Exception as e:
+        print(f"Error listing private resumes: {e}")
+        return []
+
+@app.delete("/api/delete_private_resume/{filename}")
+async def delete_private_resume_api(filename: str, user: UserState = Depends(get_current_user)):
+    import os
+    import urllib.parse
+    from dotenv import load_dotenv
+    import httpx
+    
+    load_dotenv(override=True)
+    cloud_api = os.getenv("CLOUD_STORAGE_API", "http://163.7.10.125:80")
+    
+    safe_filename = urllib.parse.quote(filename)
+    url = f"{cloud_api}/api/cloud/delete_private_resume/{user.account_name}/{safe_filename}?session_id={user.session_id}"
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(url) # Using POST to avoid proxy DELETE blocking
+            resp.raise_for_status()
+            return {"status": "success"}
+    except Exception as e:
+        print(f"Error deleting private resume: {e}")
+        raise HTTPException(status_code=500, detail="Failed to delete resume")
 
 @app.post("/api/fetch_private_resumes", response_model=List[Resume])
 async def fetch_private_resumes(filename: str, user: UserState = Depends(get_current_user)):
@@ -511,8 +571,6 @@ async def fetch_private_resumes(filename: str, user: UserState = Depends(get_cur
             resp = await client.get(url)
             resp.raise_for_status()
             
-            # 清理当前账号环境已缓存简历，避免多次拉取导致累加
-            user.resumes.clear()
             # 使用现有逻辑解析拉取下来的私有专属 PDF/ZIP
             return await process_resume_content(resp.content, filename, user)
     except Exception as e:
