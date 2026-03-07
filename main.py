@@ -20,7 +20,7 @@ def save_dict_to_cloud_bg(account_name: str, session_id: str, record_type: str, 
     from dotenv import load_dotenv
     load_dotenv(override=True)
     import os
-    cloud_api = os.getenv("CLOUD_STORAGE_API", "http://163.7.10.125:80") 
+    cloud_api = os.getenv("CLOUD_STORAGE_API", "https://zhitongche.online") 
     url = f"{cloud_api}/api/cloud/save_record"
     print(f"Saving {record_type} to cloud: {url}")
     payload = {
@@ -118,7 +118,7 @@ async def login(req: LoginRequest, x_session_id: str = Header(None)):
     
     # Delegate to global cloud server
     load_dotenv(override=True)
-    cloud_api = os.getenv("CLOUD_STORAGE_API", "http://163.7.10.125:80")
+    cloud_api = os.getenv("CLOUD_STORAGE_API", "https://zhitongche.online")
     
     url = f"{cloud_api}/api/cloud/auth/login"
     try:
@@ -156,7 +156,7 @@ async def heartbeat(x_session_id: str = Header(None), x_account_name: str = Head
     import httpx
     from dotenv import load_dotenv
     load_dotenv(override=True)
-    cloud_api = os.getenv("CLOUD_STORAGE_API", "http://163.7.10.125:80")
+    cloud_api = os.getenv("CLOUD_STORAGE_API", "https://zhitongche.online")
     
     url = f"{cloud_api}/api/cloud/auth/heartbeat"
     try:
@@ -177,7 +177,7 @@ async def logout(x_session_id: str = Header(None), user: UserState = Depends(get
     import httpx
     from dotenv import load_dotenv
     load_dotenv(override=True)
-    cloud_api = os.getenv("CLOUD_STORAGE_API", "http://163.7.10.125:80")
+    cloud_api = os.getenv("CLOUD_STORAGE_API", "https://zhitongche.online")
     
     if user.account_name and x_session_id:
         url = f"{cloud_api}/api/cloud/auth/logout"
@@ -393,7 +393,7 @@ async def fetch_resumes_from_cloud(user: UserState = Depends(get_current_user)):
     from dotenv import load_dotenv
 
     load_dotenv(override=True)
-    cloud_api = os.getenv("CLOUD_STORAGE_API", "http://163.7.10.125:80")
+    cloud_api = os.getenv("CLOUD_STORAGE_API", "https://zhitongche.online")
     url = f"{cloud_api}/api/cloud/download_public_resume"
     print(f"Fetching public resume from: {url}")
     
@@ -462,7 +462,7 @@ async def get_history(record_type: str = None, user: UserState = Depends(get_cur
     import httpx
     
     load_dotenv(override=True)
-    cloud_api = os.getenv("CLOUD_STORAGE_API", "http://163.7.10.125:80")
+    cloud_api = os.getenv("CLOUD_STORAGE_API", "https://zhitongche.online")
     
     url = f"{cloud_api}/api/cloud/get_records/{user.account_name}?session_id={user.session_id}"
     print(f"Fetching history from: {url}")
@@ -483,7 +483,7 @@ async def delete_history(record_id: int, user: UserState = Depends(get_current_u
     import os, httpx
     from dotenv import load_dotenv
     load_dotenv(override=True)
-    cloud_api = os.getenv("CLOUD_STORAGE_API", "http://163.7.10.125:80")
+    cloud_api = os.getenv("CLOUD_STORAGE_API", "https://zhitongche.online")
     url = f"{cloud_api}/api/cloud/delete_record/{record_id}?account_name={user.account_name}&session_id={user.session_id}"
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
@@ -504,7 +504,7 @@ async def upload_private(file: UploadFile = File(...), user: UserState = Depends
     import httpx
     
     load_dotenv(override=True)
-    cloud_api = os.getenv("CLOUD_STORAGE_API", "http://163.7.10.125:80")
+    cloud_api = os.getenv("CLOUD_STORAGE_API", "https://zhitongche.online")
     
     url = f"{cloud_api}/api/cloud/upload_private_resume"
     print(f"Uploading private format to: {url}")
@@ -548,7 +548,7 @@ async def list_private_resumes_api(user: UserState = Depends(get_current_user)):
     import httpx
     
     load_dotenv(override=True)
-    cloud_api = os.getenv("CLOUD_STORAGE_API", "http://163.7.10.125:80")
+    cloud_api = os.getenv("CLOUD_STORAGE_API", "https://zhitongche.online")
     
     url = f"{cloud_api}/api/cloud/list_private_resumes/{user.account_name}?session_id={user.session_id}"
     try:
@@ -571,7 +571,7 @@ async def delete_private_resume_api(filename: str, user: UserState = Depends(get
     import httpx
     
     load_dotenv(override=True)
-    cloud_api = os.getenv("CLOUD_STORAGE_API", "http://163.7.10.125:80")
+    cloud_api = os.getenv("CLOUD_STORAGE_API", "https://zhitongche.online")
     
     safe_filename = urllib.parse.quote(filename)
     url = f"{cloud_api}/api/cloud/delete_private_resume/{user.account_name}/{safe_filename}?session_id={user.session_id}"
@@ -595,7 +595,7 @@ async def fetch_private_resumes(filename: str, user: UserState = Depends(get_cur
     import httpx
     
     load_dotenv(override=True)
-    cloud_api = os.getenv("CLOUD_STORAGE_API", "http://163.7.10.125:80")
+    cloud_api = os.getenv("CLOUD_STORAGE_API", "https://zhitongche.online")
     
     safe_filename = urllib.parse.quote(filename)
     url = f"{cloud_api}/api/cloud/download_private_resume/{user.account_name}/{safe_filename}?session_id={user.session_id}"
