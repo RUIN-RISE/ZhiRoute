@@ -3,6 +3,33 @@
 
 const API_BASE = '/api';
 
+// --- 会话管理工具函数 ---
+let _sessionId: string = (() => {
+	const saved = localStorage.getItem('jobos_session_id');
+	if (saved) return saved;
+	const id = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+		const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+		return v.toString(16);
+	});
+	localStorage.setItem('jobos_session_id', id);
+	return id;
+})();
+
+export function getSessionId(): string { return _sessionId; }
+export function setSessionId(id: string) {
+	_sessionId = id;
+	localStorage.setItem('jobos_session_id', id);
+}
+
+function getHeaders(): Record<string, string> {
+	const headers: Record<string, string> = { 'Content-Type': 'application/json', 'X-Session-ID': _sessionId };
+	const accountName = localStorage.getItem('jobos_account_name');
+	if (accountName) {
+		headers['X-Account-Name'] = accountName;
+	}
+	return headers;
+}
+
 // Types matching FastAPI backend
 export interface ChatMessage {
 	role: 'user' | 'assistant';
@@ -41,6 +68,8 @@ export interface JobDefinition {
 	salary: SalaryConfig;
 	work_location: string;
 	bonus_skills: string[];
+	education?: string;
+	culture_fit?: string[];
 }
 
 export interface Resume {
@@ -72,84 +101,47 @@ export interface ActionResponse {
 	interview_questions: string[];
 }
 
-// Session Management
-const SESSION_KEY = 'jobos_session_id';
-const ACCOUNT_KEY = 'jobos_account_name';
-
-function getSessionId(): string {
-	let sid = localStorage.getItem(SESSION_KEY);
-	if (!sid) {
-		// Simple UUID v4 generator
-		sid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
-			const r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
-			return v.toString(16);
-		});
-		localStorage.setItem(SESSION_KEY, sid);
-	}
-	return sid;
-}
-
-function getHeaders(contentType = 'application/json'): HeadersInit {
-	return {
-		'Content-Type': contentType,
-		'X-Session-ID': getSessionId(),
-		'X-Account-Name': localStorage.getItem(ACCOUNT_KEY) || ''
-	};
-}
-
 // API Functions
 export const api = {
-	// Auth
-	async login(inviteCode: string): Promise<{ status: string, account_name: string }> {
+	// --- 账号认证 ---
+	async login(inviteCode: string): Promise<{ account_name: string }> {
 		const res = await fetch(`${API_BASE}/login`, {
 			method: 'POST',
 			headers: getHeaders(),
-			body: JSON.stringify({ invite_code: inviteCode })
+			body: JSON.stringify({ invite_code: inviteCode, session_id: _sessionId })
 		});
 		if (!res.ok) {
-			const err = await res.json();
+			const err = await res.json().catch(() => ({ detail: '登录失败' }));
 			throw new Error(err.detail || `Login failed: ${res.status}`);
 		}
 		const data = await res.json();
-		localStorage.setItem(ACCOUNT_KEY, data.account_name);
+		localStorage.setItem('jobos_account_name', data.account_name);
 		return data;
 	},
 
 	async logout(): Promise<void> {
-		try {
-			await fetch(`${API_BASE}/logout`, {
-				method: 'POST',
-				headers: getHeaders()
-			});
-		} catch (e) {
-			console.error("Logout error", e);
-		}
-		localStorage.removeItem(ACCOUNT_KEY);
+		await fetch(`${API_BASE}/logout`, { method: 'POST', headers: getHeaders() });
+		localStorage.removeItem('jobos_account_name');
 	},
 
 	async heartbeat(): Promise<void> {
-		const res = await fetch(`${API_BASE}/heartbeat`, {
-			method: 'POST',
-			headers: getHeaders()
-		});
-		if (!res.ok) {
-			const err = await res.json();
-			throw new Error(err.detail || `Heartbeat failed`);
-		}
+		const res = await fetch(`${API_BASE}/heartbeat`, { method: 'POST', headers: getHeaders() });
+		if (!res.ok) throw new Error(`Heartbeat failed: ${res.status}`);
 	},
 
-	// Workspace snapshot
-	async saveWorkspace(jdData: any, candidates: any[], interviewCache: any): Promise<void> {
-		const res = await fetch(`${API_BASE}/save_workspace`, {
-			method: 'POST',
-			headers: getHeaders(),
-			body: JSON.stringify({
-				jd_data: jdData,
-				candidates: candidates,
-				interview_cache: interviewCache
-			})
+	// --- 云端历史记录 ---
+	async getAccountHistory(): Promise<any[]> {
+		const res = await fetch(`${API_BASE}/account_history`, { headers: getHeaders() });
+		if (!res.ok) return [];
+		return res.json();
+	},
+
+	async deleteHistory(recordId: number): Promise<void> {
+		const res = await fetch(`${API_BASE}/delete_history/${recordId}`, {
+			method: 'DELETE',
+			headers: getHeaders()
 		});
-		if (!res.ok) throw new Error(`Save workspace failed: ${res.status}`);
+		if (!res.ok) throw new Error(`Delete history failed: ${res.status}`);
 	},
 
 	// Multi-turn chat for requirement clarification
@@ -165,10 +157,7 @@ export const api = {
 
 	// Reset chat history
 	async resetChat(): Promise<void> {
-		await fetch(`${API_BASE}/reset_chat`, {
-			method: 'POST',
-			headers: getHeaders()
-		});
+		await fetch(`${API_BASE}/reset_chat`, { method: 'POST', headers: getHeaders() });
 	},
 
 	// Generate JD from collected info
@@ -182,7 +171,6 @@ export const api = {
 		return res.json();
 	},
 
-	// Push JD context directly to Session (for History Restoration)
 	async setCurrentJd(jd: JobDefinition): Promise<void> {
 		const res = await fetch(`${API_BASE}/set_current_jd`, {
 			method: 'POST',
@@ -192,20 +180,12 @@ export const api = {
 		if (!res.ok) throw new Error(`Set current JD failed: ${res.status}`);
 	},
 
-	// 删除单条历史记录
-	async deleteHistory(recordId: number): Promise<void> {
-		const res = await fetch(`${API_BASE}/delete_history/${recordId}`, {
-			method: 'DELETE',
-			headers: getHeaders()
-		});
-		if (!res.ok) throw new Error(`Delete history failed: ${res.status}`);
-	},
-
 	// 通过 LLM 生成适合对外发布的完整 JD Markdown 文档
-	async generateJdMarkdown(): Promise<{ markdown: string }> {
+	async generateJdMarkdown(jd: JobDefinition): Promise<{ markdown: string }> {
 		const res = await fetch(`${API_BASE}/generate_jd_markdown`, {
 			method: 'POST',
-			headers: getHeaders()
+			headers: getHeaders(),
+			body: JSON.stringify(jd)
 		});
 		if (!res.ok) throw new Error(`Generate JD markdown failed: ${res.status}`);
 		return res.json();
@@ -216,12 +196,9 @@ export const api = {
 		const formData = new FormData();
 		formData.append('file', file);
 
-		// Content-Type is auto-set by fetch for FormData, so we only need X-Session-ID
-		const headers: any = { 'X-Session-ID': getSessionId() };
-
 		const res = await fetch(`${API_BASE}/upload_resumes`, {
 			method: 'POST',
-			headers: headers,
+			headers: { 'X-Session-ID': _sessionId },
 			body: formData
 		});
 		if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
@@ -232,45 +209,54 @@ export const api = {
 	async uploadMultipleResumes(files: File[]): Promise<Resume[]> {
 		// Backend expects a single file (zip)
 		// For multiple PDFs, we need to handle differently or upload one by one
-		let latestResumes: Resume[] = [];
+		const allResumes: Resume[] = [];
 
 		for (const file of files) {
 			const formData = new FormData();
 			formData.append('file', file);
 
-			const headers: any = { 'X-Session-ID': getSessionId() };
-
 			const res = await fetch(`${API_BASE}/upload_resumes`, {
 				method: 'POST',
-				headers: headers,
+				headers: { 'X-Session-ID': _sessionId },
 				body: formData
 			});
 			if (res.ok) {
-				// The backend returns the cumulative amount of resumes for the user in the session
-				latestResumes = await res.json();
-			} else {
-				console.error(`Upload failed for ${file.name}`);
+				const resumes = await res.json();
+				allResumes.push(...resumes);
 			}
 		}
 
-		return latestResumes;
+		return allResumes;
 	},
 
 	// Generate fake resumes for testing
 	async generateFakeResumes(): Promise<Resume[]> {
-		const res = await fetch(`${API_BASE}/generate_fake_resumes`, {
+		const res = await fetch(`${API_BASE}/generate_fake_resumes`, { headers: getHeaders() });
+		if (!res.ok) throw new Error(`Generate fake resumes failed: ${res.status}`);
+		return res.json();
+	},
+
+	async fetchPublicResumes(): Promise<Resume[]> {
+		const res = await fetch(`${API_BASE}/fetch_public_resumes`, {
+			method: 'POST',
 			headers: getHeaders()
 		});
-		if (!res.ok) throw new Error(`Generate fake resumes failed: ${res.status}`);
+		if (!res.ok) throw new Error(`Fetch public resumes failed: ${res.status}`);
+		return res.json();
+	},
+
+	async fetchPrivateResumes(): Promise<Resume[]> {
+		const res = await fetch(`${API_BASE}/fetch_private_resumes`, {
+			method: 'POST',
+			headers: getHeaders()
+		});
+		if (!res.ok) throw new Error(`Fetch private resumes failed: ${res.status}`);
 		return res.json();
 	},
 
 	// Analyze and rank resumes
 	async analyzeResumes(): Promise<CandidateRank[]> {
-		const res = await fetch(`${API_BASE}/analyze_resumes`, {
-			method: 'POST',
-			headers: getHeaders()
-		});
+		const res = await fetch(`${API_BASE}/analyze_resumes`, { method: 'POST', headers: getHeaders() });
 		if (!res.ok) throw new Error(`Analyze failed: ${res.status}`);
 		return res.json();
 	},
@@ -290,57 +276,26 @@ export const api = {
 		return res.json();
 	},
 
-	// Fetch history records from cloud node
-	async getAccountHistory(recordType?: string): Promise<any[]> {
-		const url = recordType ? `${API_BASE}/account_history?record_type=${recordType}` : `${API_BASE}/account_history`;
-		const res = await fetch(url, {
-			headers: getHeaders()
+	// --- 工作区云端同步 ---
+	async saveWorkspace(jdData: any, candidates: any[], interviewCache: any): Promise<void> {
+		const res = await fetch(`${API_BASE}/save_workspace`, {
+			method: 'POST',
+			headers: getHeaders(),
+			body: JSON.stringify({ jd_data: jdData, candidates, interview_cache: interviewCache })
 		});
-		if (!res.ok) throw new Error(`Fetch history failed: ${res.status}`);
-		return res.json();
+		if (!res.ok) throw new Error(`Save workspace failed: ${res.status}`);
 	},
 
-	// Upload a private resume zip to cloud node
-	async uploadPrivateResume(file: File): Promise<any> {
+	// --- 私有简历上传 ---
+	async uploadPrivateResume(file: File): Promise<void> {
 		const formData = new FormData();
 		formData.append('file', file);
-		const headers: any = { 'X-Session-ID': getSessionId() };
-
 		const res = await fetch(`${API_BASE}/upload_private_resume`, {
 			method: 'POST',
-			headers: headers,
+			headers: { 'X-Session-ID': _sessionId },
 			body: formData
 		});
-		if (!res.ok) throw new Error(`Upload private resume failed: ${res.status}`);
-		return res.json();
-	},
-
-	// Trigger pulling private resumes from cloud and parsing them
-	async fetchPrivateResumes(filename: string): Promise<Resume[]> {
-		const res = await fetch(`${API_BASE}/fetch_private_resumes?filename=${encodeURIComponent(filename)}`, {
-			method: 'POST',
-			headers: getHeaders()
-		});
-		if (!res.ok) throw new Error(`Fetch private resumes failed: ${res.status}`);
-		return res.json();
-	},
-
-	// Fetch the shared/public 'output_resume.zip' from cloud
-	async fetchPublicResumes(): Promise<Resume[]> {
-		const res = await fetch(`${API_BASE}/fetch_resumes_from_cloud`, {
-			method: 'POST',
-			headers: getHeaders()
-		});
-		if (!res.ok) throw new Error(`Fetch public resumes failed: ${res.status}`);
-		return res.json();
-	},
-
-	setSessionId(newId: string) {
-		localStorage.setItem(SESSION_KEY, newId);
-	},
-
-	getSessionId() {
-		return getSessionId();
+		if (!res.ok) throw new Error(`Private upload failed: ${res.status}`);
 	}
 };
 

@@ -2,66 +2,33 @@
 @tailwind components;
 @tailwind utilities;
 
-@layer base {
-  :root {
-    --background: 0 0% 0%;
-    --foreground: 210 40% 98%;
-    --card: 222 47% 11%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222 47% 11%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 217.2 91.2% 59.8%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 222.2 47.4% 11.2%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 223 47% 11%;
-    --muted-foreground: 215.4 16.3% 56.9%;
-    --accent: 216 34% 17%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 216 34% 17%;
-    --input: 216 34% 17%;
-    --ring: 224.3 76.3% 48%;
-    --radius: 0.5rem;
+:root {
+  --background: 0 0% 0%;
+  --foreground: 0 0% 98%;
+  --primary: 210 100% 50%;
+  /* Apple blue */
+  --primary-foreground: 0 0% 100%;
+}
 
-    /* Custom Neon Tokens */
-    --neon-indigo: 226 100% 70%;
-    --neon-cyan: 180 100% 50%;
-    --neon-purple: 270 100% 60%;
+@layer base {
+  body {
+    @apply bg-background text-foreground antialiased selection:bg-primary/30 selection:text-primary overflow-x-hidden;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif;
   }
 
-  body {
-    @apply bg-black text-white antialiased selection:bg-indigo-500/30 selection:text-indigo-200 overflow-x-hidden;
-    font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    /* Apple typography relies on font-weight and letter-spacing */
+    letter-spacing: -0.02em;
   }
 }
 
 @layer components {
-  .glass {
-    @apply bg-white/5 backdrop-blur-xl border border-white/10 shadow-2xl;
-  }
-
-  .glass-dark {
-    @apply bg-black/40 backdrop-blur-md border border-white/5;
-  }
-
-  .neon-border {
-    @apply relative border border-white/10;
-  }
-
-  .neon-border::after {
-    content: '';
-    @apply absolute -inset-[1px] rounded-[inherit] opacity-0 transition-opacity duration-500 pointer-events-none;
-    background: linear-gradient(45deg, hsl(var(--neon-indigo)), hsl(var(--neon-cyan)), hsl(var(--neon-purple)));
-    mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-    mask-composite: exclude;
-    padding: 1px;
-  }
-
-  .neon-border:hover::after {
-    @apply opacity-100;
-  }
+  /* No complex glass or neon borders anymore */
 }
 
 @keyframes progress-loading {
@@ -82,15 +49,164 @@
   animation: progress-loading 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
 }
 
-/* Custom Scrollbar */
+/* 极简网格背景 */
+.bg-grid {
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+  background-size: 40px 40px;
+  mask-image: radial-gradient(circle at center, black 40%, transparent 80%);
+  -webkit-mask-image: radial-gradient(circle at center, black 20%, transparent 80%);
+}
+
+/* 按钮扫光效果 */
+.btn-shine {
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-shine::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 50%;
+  height: 100%;
+  background: linear-gradient(to right, transparent, rgba(255, 255, 255, 0.4), transparent);
+  transform: skewX(-20deg);
+  transition: all 0s ease;
+}
+
+.btn-shine:hover::after {
+  animation: sweep 0.8s ease-out forwards;
+}
+
+@keyframes sweep {
+  0% {
+    left: -100%;
+  }
+
+  100% {
+    left: 200%;
+  }
+}
+
 ::-webkit-scrollbar {
   width: 6px;
 }
 
-::-webkit-scrollbar-track {
-  @apply bg-black;
+/* ===== 鼠标跟随光晕（利用 App.tsx 中已有的 --mouse-x / --mouse-y 变量） ===== */
+.mouse-glow {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  z-index: 1;
+  background: radial-gradient(480px circle at var(--mouse-x, 50%) var(--mouse-y, 50%),
+      rgba(59, 130, 246, 0.06) 0%,
+      rgba(139, 92, 246, 0.03) 40%,
+      transparent 70%);
+  transition: background 0.15s ease;
 }
 
-::-webkit-scrollbar-thumb {
-  @apply bg-zinc-800 rounded-full hover:bg-zinc-700 transition-colors;
+/* ===== 自定义光标 ===== */
+/* 隐藏系统默认光标 */
+*,
+*::before,
+*::after {
+  cursor: none !important;
+}
+
+/* 光标内核：小实心圆点 */
+.cursor-dot {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 6px;
+  height: 6px;
+  background: rgba(147, 197, 253, 0.9);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 9999;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 6px rgba(96, 165, 250, 0.6);
+  transition: width 0.15s, height 0.15s, background 0.15s;
+}
+
+/* 光标外环：柔和跟随 */
+.cursor-ring {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 32px;
+  height: 32px;
+  border: 1.5px solid rgba(147, 197, 253, 0.35);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 9998;
+  transform: translate(-50%, -50%);
+  transition: width 0.2s, height 0.2s, border-color 0.2s, opacity 0.2s;
+}
+
+/* 悬停可交互元素时放大 */
+a:hover~.cursor-dot,
+button:hover~.cursor-dot,
+input:hover~.cursor-dot,
+.cursor-dot.hovering {
+  width: 10px;
+  height: 10px;
+  background: rgba(96, 165, 250, 1);
+}
+
+.cursor-ring.hovering {
+  width: 44px;
+  height: 44px;
+  border-color: rgba(96, 165, 250, 0.5);
+}
+
+/* ===== 岗位澄清页面专属样式 ===== */
+
+/* 玻璃面板基础类 */
+.glass-panel {
+  @apply backdrop-blur-2xl bg-black/40 border border-white/10;
+  box-shadow:
+    0 25px 50px -12px rgba(0, 0, 0, 0.5),
+    inset 0 1px 1px rgba(255, 255, 255, 0.05);
+}
+
+/* 自定义滚动条（针对 Chrome/Safari） */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  @apply bg-transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  @apply bg-white/10 rounded-full hover:bg-white/20 transition-colors;
+}
+
+/* 文字发光效果 */
+.text-glow {
+  text-shadow: 0 0 20px rgba(96, 165, 250, 0.3);
+}
+
+/* 消息入场微动效 */
+@keyframes messageSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-message-in {
+  animation: messageSlideIn 0.4s cubic-bezier(0.23, 1, 0.32, 1) forwards;
 }

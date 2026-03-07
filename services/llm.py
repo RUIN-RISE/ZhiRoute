@@ -430,34 +430,28 @@ def _parse_resume_fields(content: str) -> Dict:
     return fields
 
 
-def rank_candidates(jd: JobDefinition, resumes: List[Dict]) -> List[CandidateRank]:
-    """Ranking with hard filter + semantic match + evidence quotes"""
-    print(f"DEBUG: Starting ranking for {len(resumes)} candidates")
-    
-    # Parse min experience from JD
-    min_exp = 0
-    exp_level = jd.experience_level.lower()
-    for c in ['1','2','3','5']:
-        if c in exp_level:
-            min_exp = int(c)
-            break
-    
-    # Hard filter
+def rank_candidates(jd: JobDefinition, resumes: list) -> list[CandidateRank]:
+    """Score candidates against JD using LLM and structure the evidence"""
+    if not resumes:
+        return []
+        
     filtered = []
+    # 尽可能将所有解析到文本的简历都传给后续，而不是武断地在规则上剔除（大模型会给它们打低分）
     for r in resumes:
-        fields = _parse_resume_fields(r['content'])
-        if fields["exp_years"] > 0 and fields["exp_years"] < min_exp - 1:
-            print(f"  FILTERED: {r['name']} (Exp {fields['exp_years']} < {min_exp})")
+        fields = r.get('parsed', {})
+        if not fields:
+            filtered.append(r)
             continue
+            
         r['parsed'] = fields
         filtered.append(r)
     
-    print(f"DEBUG: {len(filtered)} passed hard filter")
+    print(f"DEBUG: {len(filtered)} candidates prepared for LLM analysis.")
     if not filtered:
         return []
     
-    # Prepare for LLM (limit to 20 for context)
-    resumes_text = "\n\n---\n".join([f"【ID: {r['id']}】\n{r['content'][:800]}" for r in filtered[:20]])
+    # Prepare for LLM (limit to 20 for context to prevent token explosion)
+    resumes_text = "\n\n---\n".join([f"【ID: {r['id']}】\n{r['content'][:1000]}" for r in filtered[:20]])
     
     prompt = f"""
 你是招聘匹配专家。评估候选人与职位的匹配度。
@@ -470,23 +464,19 @@ def rank_candidates(jd: JobDefinition, resumes: List[Dict]) -> List[CandidateRan
 {resumes_text}
 
 【你的任务】
-1. 从上述候选人中选出匹配度最高的5人
-2. 对每人评分(0-100)，给出理由和简历原文引用
+1. 从上述候选人中选出匹配度最高的最多5人（如果整体质量都很差，也必须挑选出相对较好的几个人，给他们打极低分，绝不能返回空列表！）
+2. 对每人评分(0-100)，即便是毫不相干的候选人，也请挑出最高分的并给比如 10 分、20 分。给出理由和简历原文引用。
 
 【输出要求 - 非常重要！】
 - 必须输出一个JSON数组，以 [ 开头，以 ] 结尾
-- 数组中必须包含恰好5个对象
+- 数组中必须包含不超过5个对象（优先选满5个）
 - 每个对象格式如下：
 
 [
-  {{"resume_id": "xxx.txt", "name": "姓名", "score": 90, "summary": "理由", "evidence_quotes": ["引用1"], "top_evidence": [{{"criteria": "技能", "quote": "原文", "reasoning": "理由"}}]}},
-  {{"resume_id": "xxx.txt", "name": "姓名", "score": 85, "summary": "理由", "evidence_quotes": ["引用1"], "top_evidence": [{{"criteria": "技能", "quote": "原文", "reasoning": "理由"}}]}},
-  {{"resume_id": "xxx.txt", "name": "姓名", "score": 80, "summary": "理由", "evidence_quotes": ["引用1"], "top_evidence": [{{"criteria": "技能", "quote": "原文", "reasoning": "理由"}}]}},
-  {{"resume_id": "xxx.txt", "name": "姓名", "score": 75, "summary": "理由", "evidence_quotes": ["引用1"], "top_evidence": [{{"criteria": "技能", "quote": "原文", "reasoning": "理由"}}]}},
-  {{"resume_id": "xxx.txt", "name": "姓名", "score": 70, "summary": "理由", "evidence_quotes": ["引用1"], "top_evidence": [{{"criteria": "技能", "quote": "原文", "reasoning": "理由"}}]}}
+  {{"resume_id": "xxx.txt", "name": "姓名", "score": 90, "summary": "理由", "evidence_quotes": ["引用1"], "top_evidence": [{{"criteria": "技能", "quote": "原文", "reasoning": "理由"}}]}}
 ]
 
-严禁只返回1个对象！必须返回5个！以 [ 开头！
+严禁返回空数组！如果所有候选人都不符合要求，挑出几个给出个位数的评分也可以！
 """
     
     print("DEBUG: Sending to LLM for ranking...")

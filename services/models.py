@@ -31,6 +31,8 @@ class JobDefinition(BaseModel):
     salary: SalaryConfig = SalaryConfig()
     work_location: str = "杭州"  # Fixed, not editable
     bonus_skills: List[str] = []
+    education: str = "未指定"
+    culture_fit: List[str] = []
 
 class Resume(BaseModel):
     id: str

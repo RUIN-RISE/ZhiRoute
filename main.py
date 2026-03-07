@@ -75,14 +75,21 @@ class UserState:
 # In-memory session store: session_id -> UserState
 SESSIONS: Dict[str, UserState] = {}
 
-def get_current_user(x_session_id: str = Header(None)) -> UserState:
+async def get_current_user(x_session_id: str = Header(None)) -> UserState:
     from fastapi import HTTPException
     if not x_session_id:
-        raise HTTPException(status_code=401, detail="未提供有效会话，请先登录")
-    user = SESSIONS.get(x_session_id)
-    if not user:
-        raise HTTPException(status_code=401, detail="登录会话已过期或失效，请重新登录")
-    return user
+        raise HTTPException(status_code=401, detail="Missing X-Session-ID")
+    
+    # 如果本地内存因为重启丢失了该 session_id，则静默恢复一个空的，避免频繁401打断体验。
+    if x_session_id not in SESSIONS:
+        new_state = UserState()
+        new_state.session_id = x_session_id
+        # 为了避免账号名丢失，可以暂时将 account_name 设置为您重启前的常用名，
+        # 或者等下一次心跳时带上来
+        new_state.account_name = "account_auto_recovered"
+        SESSIONS[x_session_id] = new_state
+    
+    return SESSIONS[x_session_id]
 
 import time
 
@@ -148,6 +155,14 @@ async def heartbeat(x_session_id: str = Header(None), x_account_name: str = Head
     if not x_account_name or not x_session_id:
         return {"status": "ignored"}
         
+    # Session 自愈: 如果前端发来心跳，但我们内存里没有（比如刚重启过），直接利用现有的 session_id 补齐它。
+    if x_session_id not in SESSIONS:
+        new_state = UserState()
+        new_state.session_id = x_session_id
+        new_state.account_name = x_account_name
+        SESSIONS[x_session_id] = new_state
+        print(f"[Heartbeat] Auto-recovered session for {x_account_name}")
+
     import os
     import httpx
     from dotenv import load_dotenv
@@ -161,7 +176,10 @@ async def heartbeat(x_session_id: str = Header(None), x_account_name: str = Head
             resp.raise_for_status()
     except httpx.HTTPStatusError as e:
         if e.response.status_code == 403:
-            raise HTTPException(status_code=403, detail="账号已被其他终端挤占")
+            # 账号被其他终端挤占
+            if x_session_id in SESSIONS:
+                del SESSIONS[x_session_id]
+            raise HTTPException(status_code=401, detail="账号在其他地点登录，您已被强制登出")
     except Exception:
         pass
         
@@ -187,15 +205,6 @@ async def logout(x_session_id: str = Header(None), user: UserState = Depends(get
         del SESSIONS[x_session_id]
         
     return {"status": "success"}
-
-async def get_current_user(x_session_id: str = Header(None)) -> UserState:
-    if not x_session_id:
-        raise HTTPException(status_code=401, detail="Missing X-Session-ID")
-    
-    if x_session_id not in SESSIONS:
-        raise HTTPException(status_code=401, detail="Session expired or invalid")
-    
-    return SESSIONS[x_session_id]
 
 # Clean up globals
 # CURRENT_JD = None
@@ -369,8 +378,24 @@ async def process_resume_content(content: bytes, filename: str, user: UserState)
     # Return ALL resumes for this user so frontend count is accurate
     return user.resumes
 
-@app.post("/api/fetch_resumes_from_cloud", response_model=List[Resume])
-async def fetch_resumes_from_cloud(user: UserState = Depends(get_current_user)):
+@app.get("/api/generate_fake_resumes", response_model=List[Resume])
+async def get_fake_resumes(user: UserState = Depends(get_current_user)):
+    role_hint = "python"
+    if user.current_jd:
+        role_hint = user.current_jd.title
+    
+    # fake_data has been removed or failed in import
+    # we should handle it gracefully just in case:
+    try:
+        from services import fake_data
+        resumes = fake_data.generate_fake_resumes(count=5, role_hint=role_hint)
+        user.resumes.extend(resumes)
+    except Exception as e:
+        print(f"Fake data generation error: {e}")
+    return user.resumes
+
+@app.post("/api/fetch_public_resumes", response_model=List[Resume])
+async def fetch_public_resumes(user: UserState = Depends(get_current_user)):
     import httpx
     import os
     from dotenv import load_dotenv
@@ -381,27 +406,43 @@ async def fetch_resumes_from_cloud(user: UserState = Depends(get_current_user)):
     print(f"Fetching public resume from: {url}")
     
     try:
-        # 增加超时限制和重定向追随
         async with httpx.AsyncClient(timeout=120.0, follow_redirects=True) as client:
             response = await client.get(url)
             response.raise_for_status()
-            
-            # 清理当前账号环境已缓存简历，避免多次拉取导致累加
             user.resumes.clear()
-            # 使用提取出的核心解析逻辑来处理下载到的字节流
             return await process_resume_content(response.content, "output_resume.zip", user)
     except Exception as e:
-        print(f"Error fetching from cloud: {e}")
-        raise HTTPException(status_code=500, detail=f"无法从云端获取简历数据: {e}")
+        print(f"Error fetching public resumes: {e}")
+        raise HTTPException(status_code=500, detail=f"无法从云端获取公共简历: {e}")
 
-@app.get("/api/generate_fake_resumes", response_model=List[Resume])
-async def get_fake_resumes(user: UserState = Depends(get_current_user)):
-    role_hint = "python"
-    if user.current_jd:
-        role_hint = user.current_jd.title
+@app.post("/api/fetch_private_resumes", response_model=List[Resume])
+async def fetch_private_resumes(user: UserState = Depends(get_current_user)):
+    """加载当前账号的历史私密库"""
+    import os
     
-    resumes = fake_data.generate_fake_resumes(count=5, role_hint=role_hint)
-    user.resumes.extend(resumes)
+    # 账号私有缓存往往在云端，但本次测试环境直接在 tools/private_resumes 内隔离
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    account_dir = os.path.join(BASE_DIR, "tools", "private_resumes", user.account_name)
+    print(f"Fetching private resumes from: {account_dir}")
+    
+    if not os.path.exists(account_dir):
+        return []
+        
+    user.resumes.clear()
+    
+    # 模拟把目录里的所有有效文件当做 bytes 读取并塞给 process_resume_content
+    # 由于 process_resume_content 既支持 zip 也支持 pdf/txt，我们依次处理
+    for filename in os.listdir(account_dir):
+        if filename.lower().endswith(('.pdf', '.txt', '.md', '.zip')):
+            file_path = os.path.join(account_dir, filename)
+            try:
+                with open(file_path, "rb") as f:
+                    content = f.read()
+                # 逐个文件解析并追加到 user_state 中
+                await process_resume_content(content, filename, user)
+            except Exception as e:
+                print(f"Failed to process private resume {filename}: {e}")
+                
     return user.resumes
 
 @app.post("/api/set_current_jd")
@@ -429,11 +470,9 @@ async def gen_action(req: ActionRequest, user: UserState = Depends(get_current_u
     return action_resp
 
 @app.post("/api/generate_jd_markdown")
-async def generate_jd_markdown_api(user: UserState = Depends(get_current_user)):
+async def generate_jd_markdown_api(jd: JobDefinition, user: UserState = Depends(get_current_user)):
     """使用 LLM 生成可对外发布的完整 JD 文档（Markdown 格式）"""
-    if not user.current_jd:
-        raise HTTPException(status_code=400, detail="No JD in session. Please generate a JD first.")
-    md_text = llm.generate_jd_markdown(user.current_jd)
+    md_text = llm.generate_jd_markdown(jd)
     return {"markdown": md_text}
 
 # --- Cloud Storage Proxies ---

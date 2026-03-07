@@ -1,8 +1,8 @@
-# 职通车 JOB OS (Next-Gen) v2.0
+# 职通车 Job OS (Next-Gen) v2.0
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg) ![React](https://img.shields.io/badge/React-19.0-blue) ![Tailwind](https://img.shields.io/badge/Tailwind-4.0-cyan)
 
-**JOB OS** 是一个基于 AI 的下一代招聘流程操作系统，旨在将非结构化的招聘需求转化为高精度的结构化匹配逻辑。
+**Job OS** 是一个基于 AI 的下一代招聘流程操作系统，旨在将非结构化的招聘需求转化为高精度的结构化匹配逻辑。
 
 v2.0 版本带来了全新的 **"赛博专业 (Cyber-Professional)"** 视觉语言，结合了玻璃拟态、霓虹流光与高保真交互，为专业招聘人员提供沉浸式的工作台体验。
 
