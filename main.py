@@ -55,6 +55,11 @@ FRONTEND_DIST = os.path.join(APP_ROOT, "temp_frontend", "dist")
 if os.path.exists(FRONTEND_DIST):
     app.mount("/assets", StaticFiles(directory=os.path.join(FRONTEND_DIST, "assets")), name="assets")
 
+# Mount public directory for images like logo_avatar.png
+FRONTEND_PUBLIC = os.path.join(APP_ROOT, "temp_frontend", "public")
+if os.path.exists(FRONTEND_PUBLIC):
+    app.mount("/", StaticFiles(directory=FRONTEND_PUBLIC), name="public")
+
 # API Routes
 @app.get("/api/health")
 async def health_check():
