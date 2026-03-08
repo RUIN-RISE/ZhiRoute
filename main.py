@@ -22,7 +22,7 @@ def save_dict_to_cloud_bg(account_name: str, session_id: str, record_type: str, 
     from dotenv import load_dotenv
     load_dotenv(override=True)
     import os
-    cloud_api = os.getenv("CLOUD_STORAGE_API", "https://zhitongche.online") 
+    cloud_api = os.getenv("CLOUD_STORAGE_API", "http://163.7.10.125:8080").rstrip('/')
     url = f"{cloud_api}/api/cloud/save_record"
     print(f"Saving {record_type} to cloud: {url}")
     payload = {
@@ -117,8 +117,8 @@ async def login(req: LoginRequest, x_session_id: str = Header(None)):
         
     code = req.invite_code.strip()
     
-    # 1. Delegate to global cloud server (With "Master Key" Fix)
-    cloud_api = os.getenv("CLOUD_STORAGE_API", "https://zhitongche.online").rstrip('/')
+    # 1. Delegate to global cloud server (With "Master Key" & Port 8080 Fix)
+    cloud_api = os.getenv("CLOUD_STORAGE_API", "http://163.7.10.125:8080").rstrip('/')
     url = f"{cloud_api}/api/cloud/auth/login"
     
     # "Master Key" Fix: Force Host header to 'zhitongche.online' to bypass Nginx 404/405 issues
@@ -136,10 +136,10 @@ async def login(req: LoginRequest, x_session_id: str = Header(None)):
             if resp.status_code == 200:
                 account_name = resp.json().get("account_name")
             elif resp.status_code in [401, 403]:
-                detail = resp.json().get("detail", "内测码验证失败")
+                detail = resp.json().get("detail", "内测码验证失�?)
                 raise HTTPException(status_code=resp.status_code, detail=detail)
             else:
-                # 能够输出 Nginx 具体的报错片段（如 405 的 allow: GET 提示）
+                # 能够输出 Nginx 具体的报错片段（�?405 �?allow: GET 提示�?
                 print(f"DEBUG: Cloud Auth Status {resp.status_code} for {url}. Response hint: {resp.text[:200]}", flush=True)
     except HTTPException:
         raise
@@ -150,10 +150,10 @@ async def login(req: LoginRequest, x_session_id: str = Header(None)):
             account_name = INVITES_MAP[code]
             print(f"Fallback to local auth successful for {account_name}")
         else:
-            raise HTTPException(status_code=503, detail="鉴权服务忙（云端连接异常且本地无备份）")
+            raise HTTPException(status_code=503, detail="鉴权服务忙（云端连接异常且本地无备份�?)
 
     if not account_name:
-        raise HTTPException(status_code=401, detail="无效的内测码或鉴权失败")
+        raise HTTPException(status_code=401, detail="无效的内测码或鉴权失�?)
         
     # Ensure UserState exists
     if x_session_id not in SESSIONS:
@@ -173,7 +173,7 @@ async def heartbeat(x_session_id: str = Header(None), x_account_name: str = Head
     import httpx
     from dotenv import load_dotenv
     load_dotenv(override=True)
-    cloud_api = os.getenv("CLOUD_STORAGE_API", "https://zhitongche.online")
+    cloud_api = os.getenv("CLOUD_STORAGE_API", "http://163.7.10.125:8080").rstrip('/')
     
     url = f"{cloud_api}/api/cloud/auth/heartbeat"
     try:
@@ -194,7 +194,7 @@ async def logout(x_session_id: str = Header(None), user: UserState = Depends(get
     import httpx
     from dotenv import load_dotenv
     load_dotenv(override=True)
-    cloud_api = os.getenv("CLOUD_STORAGE_API", "https://zhitongche.online")
+    cloud_api = os.getenv("CLOUD_STORAGE_API", "http://163.7.10.125:8080").rstrip('/')
     
     if user.account_name and x_session_id:
         url = f"{cloud_api}/api/cloud/auth/logout"
@@ -410,7 +410,7 @@ async def fetch_resumes_from_cloud(user: UserState = Depends(get_current_user)):
     from dotenv import load_dotenv
 
     load_dotenv(override=True)
-    cloud_api = os.getenv("CLOUD_STORAGE_API", "https://zhitongche.online")
+    cloud_api = os.getenv("CLOUD_STORAGE_API", "http://163.7.10.125:8080").rstrip('/')
     url = f"{cloud_api}/api/cloud/download_public_resume"
     print(f"Fetching public resume from: {url}")
     
@@ -424,7 +424,7 @@ async def fetch_resumes_from_cloud(user: UserState = Depends(get_current_user)):
             return await process_resume_content(response.content, "output_resume.zip", user)
     except Exception as e:
         print(f"Error fetching from cloud: {e}")
-        raise HTTPException(status_code=500, detail=f"无法从云端获取简历数据: {e}")
+        raise HTTPException(status_code=500, detail=f"无法从云端获取简历数�? {e}")
 
 @app.get("/api/generate_fake_resumes", response_model=List[Resume])
 async def get_fake_resumes(user: UserState = Depends(get_current_user)):
@@ -462,7 +462,7 @@ async def gen_action(req: ActionRequest, user: UserState = Depends(get_current_u
 
 @app.post("/api/generate_jd_markdown")
 async def generate_jd_markdown_api(user: UserState = Depends(get_current_user)):
-    """使用 LLM 生成可对外发布的完整 JD 文档（Markdown 格式）"""
+    """使用 LLM 生成可对外发布的完整 JD 文档（Markdown 格式�?""
     if not user.current_jd:
         raise HTTPException(status_code=400, detail="No JD in session. Please generate a JD first.")
     md_text = llm.generate_jd_markdown(user.current_jd)
@@ -479,7 +479,7 @@ async def get_history(record_type: str = None, user: UserState = Depends(get_cur
     import httpx
     
     load_dotenv(override=True)
-    cloud_api = os.getenv("CLOUD_STORAGE_API", "https://zhitongche.online")
+    cloud_api = os.getenv("CLOUD_STORAGE_API", "http://163.7.10.125:8080").rstrip('/')
     
     url = f"{cloud_api}/api/cloud/get_records/{user.account_name}?session_id={user.session_id}"
     print(f"Fetching history from: {url}")
@@ -496,15 +496,15 @@ async def get_history(record_type: str = None, user: UserState = Depends(get_cur
 
 @app.delete("/api/delete_history/{record_id}")
 async def delete_history(record_id: int, user: UserState = Depends(get_current_user)):
-    """代理删除云端历史记录（按主键 id + 账号验权）"""
+    """代理删除云端历史记录（按主键 id + 账号验权�?""
     import os, httpx
     from dotenv import load_dotenv
     load_dotenv(override=True)
-    cloud_api = os.getenv("CLOUD_STORAGE_API", "https://zhitongche.online")
+    cloud_api = os.getenv("CLOUD_STORAGE_API", "http://163.7.10.125:8080").rstrip('/')
     url = f"{cloud_api}/api/cloud/delete_record/{record_id}?account_name={user.account_name}&session_id={user.session_id}"
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.post(url)   # 使用 POST 兼容不支持 DELETE 方法的反代环境
+            resp = await client.post(url)   # 使用 POST 兼容不支�?DELETE 方法的反代环�?
             resp.raise_for_status()
             return {"status": "success"}
     except Exception as e:
@@ -521,7 +521,7 @@ async def upload_private(file: UploadFile = File(...), user: UserState = Depends
     import httpx
     
     load_dotenv(override=True)
-    cloud_api = os.getenv("CLOUD_STORAGE_API", "https://zhitongche.online")
+    cloud_api = os.getenv("CLOUD_STORAGE_API", "http://163.7.10.125:8080").rstrip('/')
     
     url = f"{cloud_api}/api/cloud/upload_private_resume"
     print(f"Uploading private format to: {url}")
@@ -565,7 +565,7 @@ async def list_private_resumes_api(user: UserState = Depends(get_current_user)):
     import httpx
     
     load_dotenv(override=True)
-    cloud_api = os.getenv("CLOUD_STORAGE_API", "https://zhitongche.online")
+    cloud_api = os.getenv("CLOUD_STORAGE_API", "http://163.7.10.125:8080").rstrip('/')
     
     url = f"{cloud_api}/api/cloud/list_private_resumes/{user.account_name}?session_id={user.session_id}"
     try:
@@ -588,7 +588,7 @@ async def delete_private_resume_api(filename: str, user: UserState = Depends(get
     import httpx
     
     load_dotenv(override=True)
-    cloud_api = os.getenv("CLOUD_STORAGE_API", "https://zhitongche.online")
+    cloud_api = os.getenv("CLOUD_STORAGE_API", "http://163.7.10.125:8080").rstrip('/')
     
     safe_filename = urllib.parse.quote(filename)
     url = f"{cloud_api}/api/cloud/delete_private_resume/{user.account_name}/{safe_filename}?session_id={user.session_id}"
@@ -612,7 +612,7 @@ async def fetch_private_resumes(filename: str, user: UserState = Depends(get_cur
     import httpx
     
     load_dotenv(override=True)
-    cloud_api = os.getenv("CLOUD_STORAGE_API", "https://zhitongche.online")
+    cloud_api = os.getenv("CLOUD_STORAGE_API", "https://163.7.10.125:8080").rstrip('/')
     
     safe_filename = urllib.parse.quote(filename)
     url = f"{cloud_api}/api/cloud/download_private_resume/{user.account_name}/{safe_filename}?session_id={user.session_id}"
@@ -623,7 +623,7 @@ async def fetch_private_resumes(filename: str, user: UserState = Depends(get_cur
             resp = await client.get(url)
             resp.raise_for_status()
             
-            # 使用现有逻辑解析拉取下来的私有专属 PDF/ZIP
+            # 使用现有逻辑解析拉取下来的私有专�?PDF/ZIP
             return await process_resume_content(resp.content, filename, user)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to pull private resume: {e}")
@@ -657,12 +657,12 @@ async def serve_spa(full_path: str):
         return {"error": "API route not found"}, 404
     
     if os.path.exists(FRONTEND_DIST):
-        # 1. 尝试直接从 dist 根目录查找文件 (如 logo_avatar.png, favicon.ico)
+        # 1. 尝试直接�?dist 根目录查找文�?(�?logo_avatar.png, favicon.ico)
         target_file = os.path.join(FRONTEND_DIST, full_path)
         if os.path.isfile(target_file):
             return FileResponse(target_file)
             
-        # 2. 如果文件不存在，回退到 index.html (支持 SPA 路由)
+        # 2. 如果文件不存在，回退�?index.html (支持 SPA 路由)
         index_path = os.path.join(FRONTEND_DIST, "index.html")
         if os.path.exists(index_path):
             return FileResponse(index_path)
