@@ -6,6 +6,8 @@ from pydantic import BaseModel
 from typing import List, Dict
 import uvicorn
 import os
+from dotenv import load_dotenv
+load_dotenv(override=True)
 
 from services.models import JobRequest, ClarificationResponse, ClarificationAnswer, JobDefinition, Resume, CandidateRank, ActionRequest, ActionResponse, ChatRequest, ChatResponse
 from services import llm
@@ -110,22 +112,19 @@ class LoginRequest(BaseModel):
     
 @app.post("/api/login")
 async def login(req: LoginRequest, x_session_id: str = Header(None)):
-    import os
-    import httpx
-    from dotenv import load_dotenv
     if not x_session_id:
         raise HTTPException(status_code=400, detail="Missing X-Session-ID")
         
     code = req.invite_code.strip()
     
     # 1. Delegate to global cloud server
-    load_dotenv(override=True)
-    cloud_api = os.getenv("CLOUD_STORAGE_API", "https://zhitongche.online")
+    cloud_api = os.getenv("CLOUD_STORAGE_API", "https://zhitongche.online").rstrip('/')
     url = f"{cloud_api}/api/cloud/auth/login"
+    print(f"DEBUG: Attempting Cloud Auth at URL: {url}", flush=True)
     
     account_name = None
     try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
+        async with httpx.AsyncClient(timeout=10.0) as client:
             resp = await client.post(url, json={"invite_code": code, "session_id": x_session_id})
             if resp.status_code == 200:
                 account_name = resp.json().get("account_name")
@@ -133,11 +132,12 @@ async def login(req: LoginRequest, x_session_id: str = Header(None)):
                 detail = resp.json().get("detail", "内测码验证失败")
                 raise HTTPException(status_code=resp.status_code, detail=detail)
             else:
-                print(f"Cloud Auth Status {resp.status_code}: {resp.text}")
+                # 打印出 Nginx 报错或其他非预期的返回内容
+                print(f"DEBUG: Cloud Auth Status {resp.status_code} for {url}. Response hint: {resp.text[:200]}", flush=True)
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Cloud Auth Connection Error: {e}")
+        print(f"DEBUG: Cloud Auth Connection Error for {url}: {e}", flush=True)
         # Fallback to local auth ONLY if cloud fails due to network/server issues
         if code in INVITES_MAP:
             account_name = INVITES_MAP[code]
