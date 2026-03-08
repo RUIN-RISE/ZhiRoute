@@ -118,17 +118,17 @@ async def login(req: LoginRequest, x_session_id: str = Header(None)):
         
     code = req.invite_code.strip()
     
-    # 1. Delegate to global cloud server (With "Master Key" & Port 8080 Fix)
-    cloud_api = os.getenv("CLOUD_STORAGE_API", "http://163.7.10.125:8080").rstrip('/')
+    # 1. Delegate to global cloud server (With Master Key & Port 8080 Fix)
+    cloud_api = os.getenv("CLOUD_STORAGE_API", "http://163.7.10.125:8080").rstrip("/")
     url = f"{cloud_api}/api/cloud/auth/login"
     
-    # "Master Key" Fix: Force Host header to 'zhitongche.online' to bypass Nginx 404/405 issues
+    # Master Key Fix: Force Host header to bypass Nginx issues
     auth_headers = {
         "Host": "zhitongche.online",
         "X-Session-ID": x_session_id
     }
     
-    print(f"DEBUG: Attempting Cloud Auth at URL: {url} with forced Host header", flush=True)
+    print(f"DEBUG: Attempting Cloud Auth at URL: {url}", flush=True)
     
     account_name = None
     try:
@@ -137,26 +137,22 @@ async def login(req: LoginRequest, x_session_id: str = Header(None)):
             if resp.status_code == 200:
                 account_name = resp.json().get("account_name")
             elif resp.status_code in [401, 403]:
-                detail = resp.json().get("detail", "内测码验证失败?)
+                detail = resp.json().get("detail", "Auth failed")
                 raise HTTPException(status_code=resp.status_code, detail=detail)
             else:
-                # 能够输出 Nginx 具体的报错片段（�?405 �?allow: GET 提示�?
-                print(f"DEBUG: Cloud Status {resp.status_code} for {url}. Resp hint: {resp.text[:100]}", flush=True), flush=True)
+                print(f"DEBUG: Cloud Auth Status {resp.status_code} for {url}. Hint: {resp.text[:100]}", flush=True)
     except HTTPException:
         raise
     except Exception as e:
         print(f"DEBUG: Cloud Auth Connection Error for {url}: {e}", flush=True)
-        # Fallback to local auth ONLY if cloud fails due to network/server issues
         if code in INVITES_MAP:
             account_name = INVITES_MAP[code]
-            print(f"Fallback to local auth successful for {account_name}")
         else:
-            raise HTTPException(status_code=503, detail="鉴权服务忙（云端连接异常且本地无备份�?)
+            raise HTTPException(status_code=503, detail="Auth service busy")
 
     if not account_name:
-        raise HTTPException(status_code=401, detail="无效的内测码或鉴权失�?)
+        raise HTTPException(status_code=401, detail="Invalid code or auth failed")
         
-    # Ensure UserState exists
     if x_session_id not in SESSIONS:
         SESSIONS[x_session_id] = UserState()
     
