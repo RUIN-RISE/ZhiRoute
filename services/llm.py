@@ -107,7 +107,7 @@ def _call_llm(messages: List[Dict], timeout: float = 60.0) -> str:
             else:
                 return "{}"
         
-        print(f"[LLM] Using {model_conf['name']} (timeout={timeout}s)...")
+        print(f"[LLM] Using {model_conf['name']} (timeout={timeout}s)...", flush=True)
         
         try:
             # Instantiate client per call to support different base_urls

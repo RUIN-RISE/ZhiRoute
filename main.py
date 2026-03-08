@@ -55,11 +55,6 @@ FRONTEND_DIST = os.path.join(APP_ROOT, "temp_frontend", "dist")
 if os.path.exists(FRONTEND_DIST):
     app.mount("/assets", StaticFiles(directory=os.path.join(FRONTEND_DIST, "assets")), name="assets")
 
-# Mount public directory for images like logo_avatar.png
-FRONTEND_PUBLIC = os.path.join(APP_ROOT, "temp_frontend", "public")
-if os.path.exists(FRONTEND_PUBLIC):
-    app.mount("/", StaticFiles(directory=FRONTEND_PUBLIC), name="public")
-
 # API Routes
 @app.get("/api/health")
 async def health_check():
@@ -645,10 +640,16 @@ async def serve_spa(full_path: str):
         return {"error": "API route not found"}, 404
     
     if os.path.exists(FRONTEND_DIST):
+        # 1. 尝试直接从 dist 根目录查找文件 (如 logo_avatar.png, favicon.ico)
+        target_file = os.path.join(FRONTEND_DIST, full_path)
+        if os.path.isfile(target_file):
+            return FileResponse(target_file)
+            
+        # 2. 如果文件不存在，回退到 index.html (支持 SPA 路由)
         index_path = os.path.join(FRONTEND_DIST, "index.html")
         if os.path.exists(index_path):
             return FileResponse(index_path)
-    return {"message": "Frontend not built or not found. Run 'npm run build' and ensure 'temp_frontend/dist' exists."}
+    return JSONResponse(status_code=404, content={"error": "Frontend assets not found. Please build the project."})
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=7860)
