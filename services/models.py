@@ -25,10 +25,10 @@ class SalaryConfig(BaseModel):
 
 class JobDefinition(BaseModel):
     title: str
-    key_responsibilities: List[str] = []
-    required_skills: List[str] = []
+    key_responsibilities: List[str]
+    required_skills: List[str]
     experience_level: str
-    education: str = "未指定"
+    education: str = "???"
     salary: SalaryConfig = SalaryConfig()
     work_location: str = "杭州"  # Fixed, not editable
     bonus_skills: List[str] = []
