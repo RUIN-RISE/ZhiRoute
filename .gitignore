@@ -1,6 +1,7 @@
 __pycache__/
 *.pyc
 .env
+.env.*
 .DS_Store
 node_modules/
 temp_frontend/node_modules/
@@ -13,16 +14,12 @@ venv/
 output/
 .playwright-cli/
 test/
-
-问题记录.txt
 *.zip
 *.rar
 *.pdf
-
 technical_implementation.md
 demo_script.md
 invites.json
-.env.*
 *.pem
 *.key
 *.p12
@@ -30,3 +27,11 @@ invites.json
 *.crt
 *secrets*.yml
 *secrets*.yaml
+AI_Talent_Radar_DevPlan.md
+AI_Talent_Radar_Status.md
+PROJECT_OVERVIEW.md
+test_glm5.py
+test_or.py
+test_sf.py
+项目全面理解文档.md
+问题记录.txt
