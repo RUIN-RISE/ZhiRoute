@@ -8,6 +8,10 @@ temp_frontend/dist/
 venv/
 .idea/
 .vscode/
+.kiro/
+*.db
+output/
+.playwright-cli/
 test/
 
 问题记录.txt

@@ -7,16 +7,41 @@ from pydantic import BaseModel
 from typing import List, Dict
 import uvicorn
 import os
+import re
 from dotenv import load_dotenv
 load_dotenv(override=True)
 
 from services.models import JobRequest, ClarificationResponse, ClarificationAnswer, JobDefinition, Resume, CandidateRank, ActionRequest, ActionResponse, ChatRequest, ChatResponse
 from services import llm
 from services import fake_data
+from services import radar_db
 import httpx
 import json
 
+# Initialize local SQLite DB for AI Radar
+radar_db.init_db()
+
 app = FastAPI(title="Recruitment Copilot")
+
+MAX_UPLOAD_BYTES = 25 * 1024 * 1024
+MAX_ZIP_ENTRIES = 100
+MAX_ZIP_TOTAL_UNCOMPRESSED_BYTES = 60 * 1024 * 1024
+ALLOWED_RESUME_EXTENSIONS = {".zip", ".pdf", ".txt", ".md"}
+SESSION_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{15,127}$")
+
+
+def get_allowed_origins() -> list[str]:
+    configured = os.getenv("CORS_ALLOW_ORIGINS", "")
+    if configured.strip():
+        return [origin.strip() for origin in configured.split(",") if origin.strip()]
+    return [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "https://zhitongche.online",
+        "https://www.zhitongche.online",
+        "https://modelscope.cn",
+        "https://www.modelscope.cn",
+    ]
 
 # --- Cloud Storage Helper ---
 def save_dict_to_cloud_bg(account_name: str, session_id: str, record_type: str, content_dict: dict):
@@ -43,7 +68,8 @@ def save_dict_to_cloud_bg(account_name: str, session_id: str, record_type: str, 
 # CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=get_allowed_origins(),
+    allow_origin_regex=r"^https://([a-zA-Z0-9-]+\.)?(zhitongche\.online|modelscope\.cn)$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -78,10 +104,28 @@ class UserState:
 # In-memory session store: session_id -> UserState
 SESSIONS: Dict[str, UserState] = {}
 
+def validate_session_id(session_id: str) -> str:
+    normalized = (session_id or "").strip()
+    if not SESSION_ID_PATTERN.fullmatch(normalized):
+        raise HTTPException(status_code=401, detail="Invalid session identifier")
+    return normalized
+
+def validate_resume_upload(filename: str, content: bytes):
+    if not filename:
+        raise HTTPException(status_code=400, detail="Missing filename")
+    ext = os.path.splitext(filename)[1].lower()
+    if ext not in ALLOWED_RESUME_EXTENSIONS:
+        raise HTTPException(status_code=400, detail=f"Unsupported resume file type: {ext or 'unknown'}")
+    if len(content) == 0:
+        raise HTTPException(status_code=400, detail="Uploaded file is empty")
+    if len(content) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail=f"Uploaded file exceeds {MAX_UPLOAD_BYTES // (1024 * 1024)} MB limit")
+
 def get_current_user(x_session_id: str = Header(None)) -> UserState:
     from fastapi import HTTPException
     if not x_session_id:
         raise HTTPException(status_code=401, detail="未提供有效会话，请先登录")
+    x_session_id = validate_session_id(x_session_id)
     user = SESSIONS.get(x_session_id)
     if not user:
         # Implicitly create a guest session for unregistered users
@@ -288,6 +332,7 @@ async def clear_resumes_endpoint(user: UserState = Depends(get_current_user)):
 async def upload_resumes(file: UploadFile = File(...), user: UserState = Depends(get_current_user)):
     content = await file.read()
     filename = file.filename
+    validate_resume_upload(filename, content)
     return await process_resume_content(content, filename, user)
 
 async def process_resume_content(content: bytes, filename: str, user: UserState) -> List[Resume]:
@@ -322,7 +367,19 @@ async def process_resume_content(content: bytes, filename: str, user: UserState)
     BATCH_SIZE = 5
     
     if filename.endswith('.zip'):
-        with zipfile.ZipFile(io.BytesIO(content), 'r') as zip_ref:
+        try:
+            zip_ref = zipfile.ZipFile(io.BytesIO(content), 'r')
+        except zipfile.BadZipFile:
+            raise HTTPException(status_code=400, detail="Invalid ZIP archive")
+
+        with zip_ref:
+            members = [info for info in zip_ref.infolist() if not info.filename.startswith('__MACOSX') and not info.filename.startswith('.')]
+            if len(members) > MAX_ZIP_ENTRIES:
+                raise HTTPException(status_code=400, detail=f"ZIP archive contains too many files (limit: {MAX_ZIP_ENTRIES})")
+            total_uncompressed = sum(max(info.file_size, 0) for info in members)
+            if total_uncompressed > MAX_ZIP_TOTAL_UNCOMPRESSED_BYTES:
+                raise HTTPException(status_code=400, detail="ZIP archive is too large after extraction")
+
             for filename in zip_ref.namelist():
                 if filename.startswith('__MACOSX') or filename.startswith('.'):
                     continue
@@ -337,6 +394,8 @@ async def process_resume_content(content: bytes, filename: str, user: UserState)
                     # Queue PDF for batch processing
                     with zip_ref.open(filename) as f:
                         raw_bytes = f.read()
+                        if len(raw_bytes) > MAX_UPLOAD_BYTES:
+                            raise HTTPException(status_code=400, detail=f"ZIP member too large: {name_str}")
                         raw_text = extract_pdf_text(raw_bytes)
                         if raw_text:
                             pdf_queue.append((name_str, raw_text))
@@ -412,16 +471,16 @@ async def fetch_resumes_from_cloud(user: UserState = Depends(get_current_user)):
     print(f"Fetching public resume from: {url}")
     
     try:
-        # 增加超时限制和重定向追随
+        # 增加超时限制并自动跟随重定向
         async with httpx.AsyncClient(timeout=120.0, follow_redirects=True) as client:
             response = await client.get(url)
             response.raise_for_status()
             
-            # 使用提取出的核心解析逻辑来处理下载到的字节流
+            # 使用现有的核心解析逻辑处理下载到的字节流
             return await process_resume_content(response.content, "output_resume.zip", user)
     except Exception as e:
         print(f"Error fetching from cloud: {e}")
-        raise HTTPException(status_code=500, detail=f"无法从云端获取简历数? {e}")
+        raise HTTPException(status_code=500, detail=f"无法从云端获取简历数据: {e}")
 
 @app.get("/api/generate_fake_resumes", response_model=List[Resume])
 async def get_fake_resumes(user: UserState = Depends(get_current_user)):
@@ -501,7 +560,7 @@ async def delete_history(record_id: int, user: UserState = Depends(get_current_u
     url = f"{cloud_api}/api/cloud/delete_record/{record_id}?account_name={user.account_name}&session_id={user.session_id}"
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.post(url)   # 使用 POST 兼容不支?DELETE 方法的反代环?
+            resp = await client.post(url)   # 使用 POST 兼容不支持 DELETE 方法的反向代理环境
             resp.raise_for_status()
             return {"status": "success"}
     except Exception as e:
@@ -526,6 +585,7 @@ async def upload_private(file: UploadFile = File(...), user: UserState = Depends
     content_bytes = await file.read()
     filename = file.filename
     content_type = file.content_type
+    validate_resume_upload(filename, content_bytes)
     
     if filename.lower().endswith('.pdf'):
         try:
@@ -620,10 +680,42 @@ async def fetch_private_resumes(filename: str, user: UserState = Depends(get_cur
             resp = await client.get(url)
             resp.raise_for_status()
             
-            # 使用现有逻辑解析拉取下来的私有专?PDF/ZIP
+            # 使用现有逻辑解析拉取下来的私有 PDF/ZIP 简历
             return await process_resume_content(resp.content, filename, user)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to pull private resume: {e}")
+
+class AIRadarRequest(BaseModel):
+    resume_id: str
+    github_username: str = ""
+    modelscope_username: str = ""
+    hf_username: str = ""
+    arxiv_name: str = ""
+
+@app.post("/api/analyze/ai-radar")
+async def analyze_ai_radar(req: AIRadarRequest, user: UserState = Depends(get_current_user)):
+    from services.radar_service import analyze_ai_talent
+    try:
+        modelscope_username = req.modelscope_username or req.hf_username
+        result = await analyze_ai_talent(req.resume_id, req.github_username, modelscope_username, req.arxiv_name)
+        return result
+    except Exception as e:
+        print(f"Error in ai-radar analysis: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+class AIRadarQuestionsRequest(BaseModel):
+    resume_id: str
+    radar_data: dict
+
+@app.post("/api/analyze/ai-radar-questions")
+async def generate_ai_radar_questions(req: AIRadarQuestionsRequest, user: UserState = Depends(get_current_user)):
+    from services.radar_service import generate_ai_interview_questions
+    try:
+        questions = await generate_ai_interview_questions(req.resume_id, req.radar_data)
+        return {"questions": questions}
+    except Exception as e:
+        print(f"Error in ai-radar questions generation: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 class WorkspaceSnapshotRequest(BaseModel):
     jd_data: dict
@@ -651,15 +743,15 @@ async def save_workspace(req: WorkspaceSnapshotRequest, bg_tasks: BackgroundTask
 async def serve_spa(full_path: str):
     # If it's an API call that fell through, 404
     if full_path.startswith("api/"):
-        return {"error": "API route not found"}, 404
+        return JSONResponse(status_code=404, content={"error": "API route not found"})
     
     if os.path.exists(FRONTEND_DIST):
-        # 1. 尝试直接?dist 根目录查找文?(?logo_avatar.png, favicon.ico)
+        # 1. 优先直接从 dist 根目录查找静态文件，如 logo_avatar.png、favicon.ico
         target_file = os.path.join(FRONTEND_DIST, full_path)
         if os.path.isfile(target_file):
             return FileResponse(target_file)
             
-        # 2. 如果文件不存在，回退?index.html (支持 SPA 路由)
+        # 2. 如果文件不存在，则回退到 index.html 以支持 SPA 路由
         index_path = os.path.join(FRONTEND_DIST, "index.html")
         if os.path.exists(index_path):
             return FileResponse(index_path)

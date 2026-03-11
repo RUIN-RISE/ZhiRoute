@@ -74,6 +74,35 @@ export interface ActionResponse {
 	interview_questions: string[];
 }
 
+// --- AI Talent Radar Types ---
+export interface AIRadarDimensions {
+	github_stars?: number;
+	github_commits?: number;
+	github_prs?: number;
+	modelscope_contributions?: number;
+	arxiv_papers?: number;
+	[key: string]: number | undefined;
+}
+
+export interface AIRadarEvidence {
+	dimension: string;
+	original_text: string;
+	source_link: string;
+	analysis: string;
+}
+
+export interface AIRadarData {
+	total_score: number;
+	dimensions: AIRadarDimensions;
+	evidence: AIRadarEvidence[];
+	errors?: string[];
+	degraded?: boolean;
+}
+
+export interface AIRadarQuestionsResponse {
+	questions: string[];
+}
+
 // Session Management
 const SESSION_KEY = 'jobos_session_id';
 const ACCOUNT_KEY = 'jobos_account_name';
@@ -223,9 +252,45 @@ export const api = {
 			method: 'DELETE',
 			headers: getHeaders()
 		});
-		if (!res.ok) await handleResError(res, '删除历史记录失败');
+		if (!res.ok) return handleResError(res, '无法发送反馈记录');
 	},
 
+	// --- AI Talent Radar ---
+	analyzeAiRadar: async (
+		resumeId: string,
+		githubUsername: string = "",
+		modelscopeUsername: string = "",
+		arxivName: string = ""
+	): Promise<AIRadarData> => {
+		const res = await fetch(`${API_BASE}/analyze/ai-radar`, {
+			method: 'POST',
+			headers: getHeaders(),
+			body: JSON.stringify({
+				resume_id: resumeId,
+				github_username: githubUsername,
+				modelscope_username: modelscopeUsername,
+				arxiv_name: arxivName,
+			}),
+		});
+		if (res.ok) return res.json();
+		return handleResError(res, 'AI人才雷达分析失败');
+	},
+
+	generateAiRadarQuestions: async (resumeId: string, radarData: AIRadarData): Promise<string[]> => {
+		const res = await fetch(`${API_BASE}/analyze/ai-radar-questions`, {
+			method: 'POST',
+			headers: getHeaders(),
+			body: JSON.stringify({
+				resume_id: resumeId,
+				radar_data: radarData,
+			}),
+		});
+		if (res.ok) {
+			const data: AIRadarQuestionsResponse = await res.json();
+			return data.questions;
+		}
+		return handleResError(res, 'AI专属面试题生成失败');
+	},
 	// 通过 LLM 生成适合对外发布的完整 JD Markdown 文档
 	async generateJdMarkdown(): Promise<{ markdown: string }> {
 		const res = await fetch(`${API_BASE}/generate_jd_markdown`, {
@@ -283,7 +348,7 @@ export const api = {
 				// The backend returns the cumulative amount of resumes for the user in the session
 				latestResumes = await res.json();
 			} else {
-				await handleResError(res, `包含文件 [${file.name}] 的批量上传因意外失败响应被服务器拦截至退出`);
+				await handleResError(res, `批量上传失败，问题文件：${file.name}`);
 			}
 		}
 

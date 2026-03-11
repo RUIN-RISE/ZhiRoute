@@ -13,34 +13,33 @@ from .models import ClarificationQuestion, ClarificationResponse, JobDefinition,
 # Multi-model configuration with automatic fallback
 # Multi-model configuration with automatic fallback
 # API Keys
-MS_API_KEY = os.environ.get("MS_API_KEY")
+OR_API_KEY = os.environ.get("OR_API_KEY")
 SF_API_KEY_1 = os.environ.get("SF_API_KEY_1")
 SF_API_KEY_2 = os.environ.get("SF_API_KEY_2")
+MS_API_KEY = os.environ.get("MS_API_KEY")
 SILICON_API_KEY = os.environ.get("SILICON_API_KEY")
 
-if not MS_API_KEY:
-    print("Warning: MS_API_KEY not found.")
+if not OR_API_KEY:
+    print("Warning: OR_API_KEY not found.")
 if not SF_API_KEY_1:
     print("Warning: SF_API_KEY_1 not found.")
-if not SF_API_KEY_2:
-    print("Warning: SF_API_KEY_2 not found.")
-if not SILICON_API_KEY:
-    print("Warning: SILICON_API_KEY not found.")
+if not MS_API_KEY:
+    print("Warning: MS_API_KEY not found.")
 
 # Configuration for multi-provider support
 # Available models in order of preference
 MODEL_CONFIGS = [
     {
-        "id": "MiniMax/MiniMax-M2.5",
-        "name": "MiniMax-M2.5 (ModelScope)",
-        "base_url": "https://api-inference.modelscope.cn/v1",
-        "api_key": MS_API_KEY
+        "id": "stepfun/step-3.5-flash:free",
+        "name": "Step-3.5-Flash (OpenRouter)",
+        "base_url": "https://openrouter.ai/api/v1",
+        "api_key": OR_API_KEY
     },
     {
-        "id": "stepfun-ai/Step-3.5-Flash",
-        "name": "Step-3.5-Flash (ModelScope)",
-        "base_url": "https://api-inference.modelscope.cn/v1",
-        "api_key": MS_API_KEY
+        "id": "Pro/zai-org/GLM-5",
+        "name": "GLM-5 (SiliconFlow)",
+        "base_url": "https://api.siliconflow.cn/v1",
+        "api_key": SILICON_API_KEY
     },
     {
         "id": "step-3.5-flash",
@@ -49,34 +48,16 @@ MODEL_CONFIGS = [
         "api_key": SF_API_KEY_1
     },
     {
-        "id": "step-3.5-flash",
-        "name": "Step-3.5-Flash (SF2)",
-        "base_url":  "https://api.stepfun.com/v1",
-        "api_key": SF_API_KEY_2
-    },
-    {
-        "id": "ZhipuAI/GLM-4.7",
-        "name": "GLM-4.7 (ModelScope)",
+        "id": "stepfun-ai/Step-3.5-Flash",
+        "name": "Step-3.5-Flash (ModelScope)",
         "base_url": "https://api-inference.modelscope.cn/v1",
         "api_key": MS_API_KEY
     },
     {
-        "id": "Qwen/Qwen3-235B-A22B-Instruct-2507",
-        "name": "Qwen3 (ModelScope)",
+        "id": "MiniMax/MiniMax-M2.5",
+        "name": "MiniMax-M2.5 (ModelScope)",
         "base_url": "https://api-inference.modelscope.cn/v1",
         "api_key": MS_API_KEY
-    },
-    {
-        "id": "deepseek-ai/DeepSeek-V3.2",
-        "name": "DeepSeek-V3.2 (ModelScope)",
-        "base_url": "https://api-inference.modelscope.cn/v1",
-        "api_key": MS_API_KEY
-    },
-    {
-        "id": "zai-org/GLM-4.6",
-        "name": "GLM-4.6 (SiliconFlow)",
-        "base_url": "https://api.siliconflow.cn/v1",
-        "api_key": SILICON_API_KEY
     },
 ]
 
@@ -87,20 +68,21 @@ SYSTEM_PROMPT = """你是一个专业的招聘专家助手 Copilot。你的任�
 输出必须严格遵守 JSON 格式，不要包含Markdown代码块标记（如 ```json ... ```），直接输出纯JSON字符串。
 """
 
-def _call_llm(messages: List[Dict], timeout: float = 60.0) -> str:
+def _call_llm(messages: List[Dict], timeout: float = 60.0, allow_fallback: bool = True) -> str:
     global current_model_idx
     
     start_idx = current_model_idx
+    max_attempts = len(MODEL_CONFIGS) if allow_fallback else 1
     
     # Try each model starting from current
-    for attempt in range(len(MODEL_CONFIGS)):
+    for attempt in range(max_attempts):
         model_idx = (start_idx + attempt) % len(MODEL_CONFIGS)
         model_conf = MODEL_CONFIGS[model_idx]
         
         # Skip if API key is missing for this provider
         if not model_conf["api_key"]:
             print(f"[LLM] Skipping {model_conf['name']} (No API Key)")
-            if attempt < len(MODEL_CONFIGS) - 1:
+            if allow_fallback and attempt < max_attempts - 1:
                 # Update global to skip this one next time too
                 current_model_idx = (model_idx + 1) % len(MODEL_CONFIGS)
                 continue
@@ -136,7 +118,9 @@ def _call_llm(messages: List[Dict], timeout: float = 60.0) -> str:
         except Exception as e:
             error_msg = str(e).lower()
             print(f"[LLM] {model_conf['name']} Error: {e}")
-            
+            if not allow_fallback:
+                return "{}"
+
             # Switch to next model on error for FUTURE calls
             print(f"[LLM] Switching to next model...")
             current_model_idx = (model_idx + 1) % len(MODEL_CONFIGS)

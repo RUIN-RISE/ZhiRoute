@@ -36,11 +36,13 @@ import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { motion, AnimatePresence } from 'framer-motion';
 import logoW from './assets/logo_w.png';
+import { prettifyResumeSnippet } from './resumePresentation';
 // --- API CLIENT ---
 import api from './api';
 import type { ChatMessage, CandidateRank, JobDefinition } from './api';
 import { useFlowReducer, INITIAL_JD } from './store/flowReducer';
 import { useWorkspace } from './hooks/useWorkspace';
+import { AITalentRadar } from './components/AITalentRadar';
 
 // --- UTILS ---
 function cn(...inputs: ClassValue[]) {
@@ -226,7 +228,7 @@ export default function JobOSCmdDeck() {
           </div>
         </div>
         <div className="flex items-center gap-6">
-          <div className="flex items-center gap-2 text-xs text-zinc-500 font-medium">
+          <div className="flex items-center gap-2 text-xs text-zinc-400 font-medium">
             <div className={cn("w-1.5 h-1.5 rounded-full", step === 'IDLE' ? "bg-zinc-600" : "bg-emerald-500")}></div>
             {step === 'IDLE' ? 'System Ready' : 'Pipeline Active'}
           </div>
@@ -240,7 +242,7 @@ export default function JobOSCmdDeck() {
                 value={inviteCode}
                 onChange={e => setInviteCode(e.target.value.toUpperCase())}
                 placeholder="输入内测码..."
-                className="bg-transparent border border-white/10 rounded-full px-4 py-1.5 text-sm font-mono text-white focus:outline-none focus:border-indigo-500 w-32 placeholder:text-zinc-600 transition-colors uppercase hover:bg-white/5"
+                className="bg-transparent border border-white/10 rounded-full px-4 py-1.5 text-sm font-mono text-white focus:outline-none focus:border-indigo-500 w-36 sm:w-40 placeholder:text-zinc-500 transition-colors uppercase hover:bg-white/5"
               />
               <button type="submit" className="border border-white/10 text-white px-5 py-1.5 rounded-full text-sm font-medium hover:bg-white/5 transition-colors">
                 登录
@@ -582,7 +584,6 @@ function JdMarkdownExport({ jd }: { jd: JobDefinition }) {
 function LandingPage({ onStart, isLogged, onSkipToDashboard, onImportJd }: { onStart: (role: string) => void, isLogged?: boolean, onSkipToDashboard?: () => void, onImportJd?: (jd: JobDefinition) => void }) {
   const [input, setInput] = useState('');
   const [suggestionIdx, setSuggestionIdx] = useState(0);
-
   const [showImportModal, setShowImportModal] = useState(false);
   const [importText, setImportText] = useState('');
   const [isImporting, setIsImporting] = useState(false);
@@ -611,39 +612,33 @@ function LandingPage({ onStart, isLogged, onSkipToDashboard, onImportJd }: { onS
 
   return (
     <div className="flex-1 flex flex-col items-center justify-center p-4">
-      {/* 中央智能图标 (呼吸、闪烁、旋转环动效) */}
       <div className="mb-14 relative animate-fadeInUp delay-100 group cursor-default">
-        {/* 底层发光 */}
         <div className="absolute inset-0 bg-blue-500/20 blur-3xl rounded-full animate-glowPulse" />
-
-        {/* 核心主体 */}
         <div className="w-24 h-24 rounded-full border border-zinc-800 bg-zinc-950 flex items-center justify-center relative z-10 animate-breathe shadow-2xl">
-          {/* 旋转科技细环 */}
           <div className="absolute -inset-1 rounded-full border border-dashed border-blue-500/30 animate-spinSlow pointer-events-none" />
           <div className="absolute -inset-3 rounded-full border border-zinc-800/50 animate-spinSlowReverse pointer-events-none" />
-
           <Radar className="w-10 h-10 text-blue-400/90 drop-shadow-[0_0_8px_rgba(96,165,250,0.5)]" />
         </div>
       </div>
 
       <div className="text-center max-w-6xl space-y-8 mb-20 relative z-10">
         <h1 className="text-6xl md:text-7xl font-black text-white tracking-tight leading-[1.1] drop-shadow-2xl">
-          简历筛选<br />
-          <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#E2E8F0] via-[#A3B8CC] to-[#5C7C99]">从未如此智能</span>
+          {"简历筛选"}<br />
+          <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#E2E8F0] via-[#A3B8CC] to-[#5C7C99]">{"从未如此智能"}</span>
         </h1>
         <div className="space-y-6 max-w-2xl mx-auto">
-          <p className="text-lg md:text-xl text-zinc-500 font-medium">
-            将繁琐的初筛工作交给 AI。
+          <p className="text-lg md:text-xl text-zinc-400 font-medium">
+            {"将繁琐的初筛工作交给 AI。"}
           </p>
-          <div className="inline-flex items-center gap-3 px-6 py-2.5 rounded-full border border-white/5 bg-white/[0.02] text-zinc-500 text-sm tracking-wide">
-            <span>自动化流水线:</span>
-            <span>岗位澄清</span>
-            <span className="opacity-40">➔</span>
-            <span>简历解析</span>
-            <span className="opacity-40">➔</span>
-            <span>智能排序</span>
-            <span className="opacity-40">➔</span>
-            <span>面试邀约</span>
+          <div className="inline-flex items-center gap-3 px-6 py-2.5 rounded-full border border-white/10 bg-white/[0.03] text-zinc-400 text-sm tracking-wide shadow-[0_0_20px_rgba(255,255,255,0.03)]">
+            <span>{"自动化流水线:"}</span>
+            <span>{"岗位澄清"}</span>
+            <span className="opacity-40">{">"}</span>
+            <span>{"简历解析"}</span>
+            <span className="opacity-40">{">"}</span>
+            <span>{"智能排序"}</span>
+            <span className="opacity-40">{">"}</span>
+            <span>{"面试邀约"}</span>
           </div>
         </div>
       </div>
@@ -653,10 +648,9 @@ function LandingPage({ onStart, isLogged, onSkipToDashboard, onImportJd }: { onS
           <div className="text-blue-500 font-mono text-xl font-bold opacity-80 select-none mr-2">
             &gt;_
           </div>
-          <input autoFocus className="flex-1 bg-transparent border-none text-white text-lg h-14 outline-none placeholder:text-zinc-600 font-medium tracking-wide caret-blue-400" value={input} onChange={e => setInput(e.target.value)} placeholder="" />
+          <input autoFocus className="flex-1 bg-transparent border-none text-white text-lg h-14 outline-none placeholder:text-zinc-500 font-medium tracking-wide caret-blue-400" value={input} onChange={e => setInput(e.target.value)} placeholder="" />
           {!input && (
-            <div className="absolute left-14 top-1/2 -translate-y-1/2 text-zinc-600 text-lg pointer-events-none flex items-center font-medium opacity-50">
-
+            <div className="absolute left-14 top-1/2 -translate-y-1/2 text-zinc-500 text-lg pointer-events-none flex items-center font-medium opacity-60">
               <AnimatePresence mode="wait">
                 <motion.span key={suggestionIdx} initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} transition={{ duration: 0.3 }}>
                   {START_SUGGESTIONS[suggestionIdx]}
@@ -666,27 +660,25 @@ function LandingPage({ onStart, isLogged, onSkipToDashboard, onImportJd }: { onS
           )}
           <div className="flex gap-2">
             <button type="submit" className="bg-[#007BFF] text-white hover:bg-[#0069DA] active:bg-[#0056B3] px-8 h-12 rounded-full font-bold text-sm tracking-widest transition-colors flex items-center gap-2 whitespace-nowrap shadow-[0_0_20px_rgba(0,123,255,0.3)] hover:shadow-[0_0_30px_rgba(0,123,255,0.5)]">
-              开始筛选
+              {"开始筛选"}
               <ArrowRight className="w-4 h-4 ml-1" />
             </button>
           </div>
         </form>
 
-        {/* Secondary Action: Skip to Dashboard and Import */}
         <div className="mt-8 flex justify-center gap-4 flex-wrap">
           <button type="button" onClick={() => setShowImportModal(true)} className="px-8 py-3 rounded-xl border border-white/10 text-zinc-400 bg-white/5 hover:bg-white/10 transition-all text-sm font-bold flex items-center justify-center whitespace-nowrap backdrop-blur-md">
-            导入外部 JD (跳过对话)
+            {"导入外部 JD (跳过对话)"}
           </button>
 
           {isLogged && (
             <button type="button" onClick={onSkipToDashboard} className="px-8 py-3 rounded-xl border border-indigo-500/30 text-indigo-300 bg-black/40 hover:bg-indigo-500/10 transition-all text-sm font-bold flex items-center justify-center whitespace-nowrap backdrop-blur-md hover:shadow-[0_0_20px_rgba(99,102,241,0.2)]">
-              直接进入简历库
+              {"直接进入简历库"}
             </button>
           )}
         </div>
       </div>
 
-      {/* Import Modal */}
       {typeof document !== 'undefined' && createPortal(
         <AnimatePresence>
           {showImportModal && (
@@ -696,20 +688,20 @@ function LandingPage({ onStart, isLogged, onSkipToDashboard, onImportJd }: { onS
                 <div className="flex items-center justify-between mb-6 shrink-0">
                   <div className="flex items-center gap-4">
                     <div className="w-10 h-10 rounded-xl bg-indigo-500/20 flex items-center justify-center text-indigo-400"><FileText className="w-5 h-5" /></div>
-                    <h3 className="text-xl font-bold tracking-tight text-white">直接导入 JD 文本</h3>
+                    <h3 className="text-xl font-bold tracking-tight text-white">{"直接导入 JD 文本"}</h3>
                   </div>
                   <button onClick={() => !isImporting && setShowImportModal(false)} className="text-zinc-500 hover:text-white transition-colors"><XCircle className="w-6 h-6" /></button>
                 </div>
                 <textarea
                   value={importText}
                   onChange={e => setImportText(e.target.value)}
-                  placeholder="请将完整的招聘需求贴在此处，AI将自动提取关键信息并构造数字画像..."
+                  placeholder={"请将完整的招聘需求贴在此处，AI 将自动提取关键信息并构造数字画像..."}
                   className="w-full flex-1 min-h-[16rem] bg-white/5 border border-white/10 rounded-xl p-4 text-sm text-zinc-300 focus:outline-none focus:border-indigo-500/50 resize-none"
                   disabled={isImporting}
                 />
                 <div className="mt-6 flex justify-end shrink-0">
                   <MagneticButton disabled={isImporting || !importText.trim()} onClick={handleImportSubmit} className="bg-indigo-600 text-white px-8 py-3 rounded-xl font-bold flex items-center gap-2 hover:bg-indigo-500 disabled:opacity-50 transition-colors">
-                    {isImporting ? <><Loader2 className="w-4 h-4 animate-spin" /> 解析提取中...</> : <><CheckCircle className="w-4 h-4" /> 确认导入</>}
+                    {isImporting ? <><Loader2 className="w-4 h-4 animate-spin" /> {"解析提取中..."}</> : <><CheckCircle className="w-4 h-4" /> {"确认导入"}</>}
                   </MagneticButton>
                 </div>
               </motion.div>
@@ -1069,6 +1061,7 @@ function ExecutionDashboard({
   const [isDragOver, setIsDragOver] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<number>(0);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [selectedRadarCandidate, setSelectedRadarCandidate] = useState<CandidateRank | null>(null);
   // processedCount is now a prop
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -1342,14 +1335,15 @@ function ExecutionDashboard({
                   <div onClick={() => setExpandedId(isExpanded ? null : c.resume_id)} className={cn("p-8 cursor-pointer transition-all duration-300 relative z-10", isExpanded ? "bg-white/[0.06] border-b border-white/5" : "hover:bg-white/[0.02]")}>
                     <div className="absolute top-0 left-0 w-1.5 h-full bg-gradient-to-b from-indigo-500 to-transparent opacity-0 group-hover:opacity-100 transition-opacity rounded-l-2xl"></div>
                     <div className="flex gap-10 items-start">
-                      <div className="w-28 shrink-0 flex flex-col items-center justify-center border-r border-white/5 pr-10 py-2"><div className="text-5xl font-black text-white tracking-tighter shadow-indigo-500/50 drop-shadow-lg">{c.score}</div><div className="text-[10px] text-zinc-500 uppercase tracking-[0.2em] mt-2 font-bold">Match Score</div></div>
+                      <div className="w-28 shrink-0 flex flex-col items-center justify-center border-r border-white/5 pr-10 py-2"><div className="text-5xl font-black text-white tracking-tighter shadow-indigo-500/50 drop-shadow-lg">{c.score}</div><div className="text-[10px] text-zinc-500 uppercase tracking-[0.2em] mt-2 font-bold">匹配分</div></div>
                       <div className="flex-1 space-y-5">
                         <div className="flex items-center justify-between"><div className="flex items-center gap-4"><h4 className="text-3xl font-bold text-white tracking-tight">{c.name}</h4><div className="flex items-center gap-1.5 text-zinc-400 bg-white/5 border border-white/10 px-3 py-1 rounded-full text-xs font-bold hover:text-white hover:bg-white/10 transition-colors"><span className="hidden sm:inline">{isExpanded ? '收起证据详情' : '展开查看证据链'}</span><ChevronDown className={cn("w-4 h-4 transition-transform duration-300", isExpanded && "rotate-180")} /></div></div></div>
                         <div className="p-5 bg-indigo-500/5 border border-indigo-500/10 rounded-2xl relative overflow-hidden group-hover:bg-indigo-500/10 transition-colors"><div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-500/30 to-transparent"></div><div className="flex items-center gap-3 text-xs font-black text-indigo-400 uppercase tracking-widest mb-2"><Zap className="w-4 h-4" /> AI 推荐理由</div><p className="text-base text-indigo-100/90 leading-relaxed font-medium font-sans">{c.summary}</p></div>
-                        {!isExpanded && <div className="pt-2 pl-2"><div className="text-xs text-zinc-500 font-mono flex items-center gap-3"><CheckCircle2 className="w-4 h-4 text-emerald-500" /><span className="text-emerald-400/80">原文证据:</span><span className="text-zinc-400 italic">"{c.top_evidence[0]?.quote || 'N/A'}"</span></div></div>}
+                        {!isExpanded && <div className="pt-2 pl-2"><div className="text-xs text-zinc-500 font-mono flex items-center gap-3"><CheckCircle2 className="w-4 h-4 text-emerald-500" /><span className="text-emerald-400/80">原文证据:</span><span className="text-zinc-400 italic">"{prettifyResumeSnippet(c.top_evidence[0]?.quote || 'N/A')}"</span></div></div>}
                       </div>
                       <div className="w-40 shrink-0 flex flex-col gap-3 justify-center border-l border-white/5 pl-10 h-full py-4">
                         <button onClick={(e) => { e.stopPropagation(); onStartInterview(c); }} className="w-full py-3 bg-white text-black text-sm font-bold rounded-xl hover:bg-zinc-200 transition-colors shadow-lg active:scale-95">生成操作</button>
+                        <button onClick={(e) => { e.stopPropagation(); setSelectedRadarCandidate(c); }} className="w-full py-3 bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 text-sm font-bold rounded-xl hover:bg-indigo-500/30 hover:text-indigo-300 transition-colors shadow-lg active:scale-95 flex items-center justify-center gap-2"><Zap className="w-4 h-4" /> AI人才雷达</button>
                         <button onClick={(e) => { e.stopPropagation(); setCandidates(prev => prev.filter(x => x.resume_id !== c.resume_id)); }} className="w-full py-3 bg-transparent border border-white/10 text-zinc-400 text-sm font-bold rounded-xl hover:bg-white/5 hover:text-red-400 hover:border-red-500/30 transition-colors active:scale-95">忽略</button>
                       </div>
                     </div>
@@ -1361,7 +1355,7 @@ function ExecutionDashboard({
                           <div className="space-y-4">
                             <h5 className="text-xs font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2"><FileText className="w-4 h-4" /> 简历关键信息</h5>
                             <div className="bg-black/40 border border-white/5 rounded-xl p-5 space-y-4 font-sans text-sm">
-                              <div className="space-y-1"><span className="text-zinc-600 text-xs">简历原文片段</span><div className="text-zinc-300 leading-relaxed">{c.evidence_quotes.join(' ... ')}</div></div>
+                              <div className="space-y-1"><span className="text-zinc-600 text-xs">简历原文片段</span><div className="text-zinc-300 leading-relaxed whitespace-pre-line">{c.evidence_quotes.map(prettifyResumeSnippet).join('\n\n')}</div></div>
                             </div>
                           </div>
                           <div className="space-y-4">
@@ -1370,7 +1364,7 @@ function ExecutionDashboard({
                               {c.top_evidence.map((ev, idx) => (
                                 <div key={idx} className="bg-black/40 border border-white/5 rounded-xl p-4 relative overflow-hidden">
                                   <div className="flex justify-between items-start mb-2"><span className="text-xs font-bold text-indigo-400 uppercase">{ev.criteria}</span></div>
-                                  <p className="text-zinc-400 text-xs mb-3 italic">"{ev.quote}"</p>
+                                  <p className="text-zinc-400 text-xs mb-3 italic whitespace-pre-line">"{prettifyResumeSnippet(ev.quote)}"</p>
                                   <p className="text-indigo-200 text-sm">{ev.reasoning}</p>
                                 </div>
                               ))}
@@ -1388,6 +1382,13 @@ function ExecutionDashboard({
           <div className="text-center text-zinc-600 py-20">暂无匹配结果</div>
         )}
       </div>
+
+      {selectedRadarCandidate && (
+        <AITalentRadar
+          candidate={selectedRadarCandidate}
+          onClose={() => setSelectedRadarCandidate(null)}
+        />
+      )}
     </div>
   );
 }
