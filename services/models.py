@@ -1,54 +1,64 @@
 from pydantic import BaseModel
-from typing import List, Optional, Dict
+from typing import Dict, List, Optional
+
 
 class JobRequest(BaseModel):
     raw_requirement: str
 
+
 class ClarificationOption(BaseModel):
     text: str
-    requires_input: bool = False  # Whether this option needs additional text input
+    requires_input: bool = False
+
 
 class ClarificationQuestion(BaseModel):
     id: str
     question: str
-    multi_select: bool = False  # True = checkboxes, False = radio
+    multi_select: bool = False
     options: Optional[List[ClarificationOption]] = None
+
 
 class ClarificationResponse(BaseModel):
     questions: List[ClarificationQuestion]
 
+
 class SalaryConfig(BaseModel):
     range: str = "面议"
-    tax_type: str = "税前" # 税前/税后
-    has_bonus: bool = False # 是否含绩效
+    tax_type: str = "税前"
+    has_bonus: bool = False
     description: Optional[str] = None
+
 
 class JobDefinition(BaseModel):
     title: str
-    key_responsibilities: List[str]
-    required_skills: List[str]
+    key_responsibilities: List[str] = []
+    required_skills: List[str] = []
     experience_level: str
-    education: str = "???"
+    education: str = "未指定"
     salary: SalaryConfig = SalaryConfig()
-    work_location: str = "杭州"  # Fixed, not editable
+    work_location: str = "杭州"
     bonus_skills: List[str] = []
     culture_fit: List[str] = []
+
 
 class Resume(BaseModel):
     id: str
     name: str
-    content: str  # Raw text content for now
+    content: str
     parsed_skills: Optional[List[str]] = None
     years_experience: Optional[int] = None
+
 
 class ClarificationAnswer(BaseModel):
     question_id: str
     answer: str
 
+
 class Evidence(BaseModel):
     criteria: str
     quote: str
     reasoning: str
+
 
 class CandidateRank(BaseModel):
     resume_id: str
@@ -57,29 +67,32 @@ class CandidateRank(BaseModel):
     score: int
     summary: str
     top_evidence: List[Evidence]
-    evidence_quotes: List[str] = []  # Direct quotes from resume
+    evidence_quotes: List[str] = []
+
 
 class ActionRequest(BaseModel):
     candidate_name: str
-    action_type: str # 'offer', 'reject', 'interview'
+    action_type: str
     job_title: str
+
 
 class ActionResponse(BaseModel):
     content: str
-    interview_questions: List[str] = []  # For interview type
+    interview_questions: List[str] = []
 
-# Multi-turn chat models
+
 class ChatMessage(BaseModel):
-    role: str  # 'user' or 'assistant'
+    role: str
     content: str
+
 
 class ChatRequest(BaseModel):
     message: str
     history: List[ChatMessage] = []
 
+
 class ChatResponse(BaseModel):
     reply: str
-    is_complete: bool = False  # True when all info is collected
-    collected_info: Dict = {}  # Collected requirement info
-    quick_replies: List[str] = []  # Optional quick reply buttons
-
+    is_complete: bool = False
+    collected_info: Dict = {}
+    quick_replies: List[str] = []

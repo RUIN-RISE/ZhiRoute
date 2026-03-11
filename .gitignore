@@ -22,3 +22,11 @@ test/
 technical_implementation.md
 demo_script.md
 invites.json
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*secrets*.yml
+*secrets*.yaml
